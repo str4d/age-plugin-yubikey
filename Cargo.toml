@@ -11,3 +11,17 @@ license = "MIT OR Apache-2.0"
 edition = "2018"
 
 [dependencies]
+age-core = "0.5"
+age-plugin = "0.0"
+base64 = "0.13"
+bech32 = "0.7"
+elliptic-curve = "0.6"
+gumdrop = "0.8"
+p256 = "0.5"
+ring = "0.16.15"
+secrecy = "0.7"
+sha2 = "0.9"
+
+[patch.crates-io]
+age-core = { git = "https://github.com/str4d/rage.git", rev = "d8fd951e059d9f7116b2b9dd0d176798a11b49f3" }
+age-plugin = { git = "https://github.com/str4d/rage.git", rev = "d8fd951e059d9f7116b2b9dd0d176798a11b49f3" }
