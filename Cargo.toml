@@ -21,6 +21,7 @@ p256 = "0.5"
 ring = "0.16.15"
 secrecy = "0.7"
 sha2 = "0.9"
+yubikey-piv = { version = "0.1.0", features = ["untested"] }
 
 [patch.crates-io]
 age-core = { git = "https://github.com/str4d/rage.git", rev = "d8fd951e059d9f7116b2b9dd0d176798a11b49f3" }
