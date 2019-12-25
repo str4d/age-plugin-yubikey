@@ -12,6 +12,8 @@ use secrecy::ExposeSecret;
 use std::convert::TryInto;
 use std::hash;
 use std::io;
+use std::thread::sleep;
+use std::time::SystemTime;
 use yubikey_piv::{
     certificate::{Certificate, PublicKeyInfo},
     key::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
@@ -22,7 +24,7 @@ use yubikey_piv::{
 use crate::{
     format::{yubikey_tag, RecipientLine, STANZA_KEY_LABEL},
     p256::PublicKey,
-    IDENTITY_PREFIX,
+    FIFTEEN_SECONDS, IDENTITY_PREFIX, ONE_SECOND,
 };
 
 /// A reference to an age key stored in a YubiKey.
@@ -107,6 +109,51 @@ impl Stub {
     ) -> io::Result<Result<Connection, Error>> {
         let mut yubikey = match YubiKey::open_by_serial(self.serial) {
             Ok(yk) => yk,
+            Err(yubikey_piv::Error::NotFound) => {
+                if callbacks
+                    .message(&format!(
+                        "Please insert YubiKey with serial {}",
+                        self.serial
+                    ))?
+                    .is_err()
+                {
+                    return Ok(Err(Error::Identity {
+                        index: self.identity_index,
+                        message: format!("Could not find YubiKey with serial {}", self.serial),
+                    }));
+                }
+
+                // Start a 15-second timer waiting for the YubiKey to be inserted
+                let start = SystemTime::now();
+                loop {
+                    match YubiKey::open_by_serial(self.serial) {
+                        Ok(yubikey) => break yubikey,
+                        Err(yubikey_piv::Error::NotFound) => (),
+                        Err(_) => {
+                            return Ok(Err(Error::Identity {
+                                index: self.identity_index,
+                                message: format!(
+                                    "Could not open YubiKey with serial {}",
+                                    self.serial
+                                ),
+                            }));
+                        }
+                    }
+
+                    match SystemTime::now().duration_since(start) {
+                        Ok(end) if end >= FIFTEEN_SECONDS => {
+                            return Ok(Err(Error::Identity {
+                                index: self.identity_index,
+                                message: format!(
+                                "Timed out while waiting for YubiKey with serial {} to be inserted",
+                                self.serial
+                            ),
+                            }))
+                        }
+                        _ => sleep(ONE_SECOND),
+                    }
+                }
+            }
             Err(_) => {
                 return Ok(Err(Error::Identity {
                     index: self.identity_index,

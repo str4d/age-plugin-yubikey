@@ -5,6 +5,8 @@ use rand::{rngs::OsRng, RngCore};
 use std::convert::TryFrom;
 use std::fmt;
 use std::io;
+use std::thread::sleep;
+use std::time::{Duration, SystemTime};
 use yubikey_piv::{
     certificate::{Certificate, PublicKeyInfo},
     key::{generate as yubikey_generate, AlgorithmId, Key, RetiredSlotId, SlotId},
@@ -44,8 +46,12 @@ const USABLE_SLOTS: [RetiredSlotId; 20] = [
     RetiredSlotId::R20,
 ];
 
+const ONE_SECOND: Duration = Duration::from_secs(1);
+const FIFTEEN_SECONDS: Duration = Duration::from_secs(15);
+
 enum Error {
     Io(io::Error),
+    TimedOut,
     YubiKey(yubikey_piv::Error),
 }
 
@@ -67,6 +73,7 @@ impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Io(e) => writeln!(f, "Failed to set up YubiKey: {}", e)?,
+            Error::TimedOut => writeln!(f, "Timed out while waiting for a YubiKey to be inserted")?,
             Error::YubiKey(e) => match e {
                 yubikey_piv::error::Error::NotFound => {
                     writeln!(f, "Please insert the YubiKey you want to set up")?
@@ -127,9 +134,28 @@ fn main() -> Result<(), Error> {
     eprintln!("");
 
     let mut readers = Readers::open()?;
-    let readers_list: Vec<_> = readers.iter()?.collect();
-    let reader_names: Vec<_> = readers_list.iter().map(|reader| reader.name()).collect();
+    let readers_list: Vec<_> = if readers.iter()?.len() > 0 {
+        readers.iter()?.collect()
+    } else {
+        eprintln!("⏳ Please insert the YubiKey you want to set up.");
 
+        // Start a 15-second timer waiting for a YubiKey to be inserted
+        let start = SystemTime::now();
+        loop {
+            readers = Readers::open()?;
+            let readers_list: Vec<_> = readers.iter()?.collect();
+            if !readers_list.is_empty() {
+                break readers_list;
+            }
+
+            match SystemTime::now().duration_since(start) {
+                Ok(end) if end >= FIFTEEN_SECONDS => return Err(Error::TimedOut),
+                _ => sleep(ONE_SECOND),
+            }
+        }
+    };
+
+    let reader_names: Vec<_> = readers_list.iter().map(|reader| reader.name()).collect();
     let mut yubikey = match Select::new()
         .with_prompt("🔑 Select a YubiKey")
         .items(&reader_names)
