@@ -5,6 +5,9 @@ use age_core::{
     primitives::{aead_decrypt, hkdf},
 };
 use age_plugin::identity::{Callbacks, Error};
+use bech32::ToBase32;
+use elliptic_curve::sec1::EncodedPoint;
+use p256::NistP256;
 use secrecy::ExposeSecret;
 use std::convert::TryInto;
 use std::hash;
@@ -19,6 +22,7 @@ use yubikey_piv::{
 use crate::{
     format::{yubikey_tag, RecipientLine, STANZA_KEY_LABEL},
     p256::PublicKey,
+    IDENTITY_PREFIX,
 };
 
 /// A reference to an age key stored in a YubiKey.
@@ -45,6 +49,28 @@ impl hash::Hash for Stub {
 }
 
 impl Stub {
+    /// Returns a key stub and recipient for this `(Serial, SlotId, PublicKey)` tuple.
+    ///
+    /// Does not check that the `PublicKey` matches the given `(Serial, SlotId)` tuple;
+    /// this is checked at decryption time.
+    pub(crate) fn new(
+        serial: Serial,
+        slot: RetiredSlotId,
+        pubkey: EncodedPoint<NistP256>,
+    ) -> Option<(Self, PublicKey)> {
+        PublicKey::from_pubkey(pubkey).map(|pk| {
+            (
+                Stub {
+                    serial,
+                    slot,
+                    tag: yubikey_tag(&pk),
+                    identity_index: 0,
+                },
+                pk,
+            )
+        })
+    }
+
     pub(crate) fn from_bytes(bytes: &[u8], identity_index: usize) -> Option<Self> {
         let serial = Serial::from(u32::from_le_bytes(bytes[0..4].try_into().unwrap()));
         let slot: RetiredSlotId = bytes[4].try_into().ok()?;
@@ -62,6 +88,13 @@ impl Stub {
         bytes.push(self.slot.into());
         bytes.extend_from_slice(&self.tag);
         bytes
+    }
+
+    /// Serializes this YubiKey stub as a string.
+    pub fn to_str(&self) -> String {
+        bech32::encode(IDENTITY_PREFIX, self.to_bytes().to_base32())
+            .expect("HRP is valid")
+            .to_uppercase()
     }
 
     pub(crate) fn matches(&self, line: &RecipientLine) -> bool {
