@@ -3,6 +3,7 @@ use std::io;
 
 pub enum Error {
     Io(io::Error),
+    MultipleCommands,
 }
 
 impl From<io::Error> for Error {
@@ -17,6 +18,10 @@ impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Io(e) => writeln!(f, "Failed to set up YubiKey: {}", e)?,
+            Error::MultipleCommands => writeln!(
+                f,
+                "Only one of --generate, --identity, --list, --list-all can be specified."
+            )?,
         }
         writeln!(f)?;
         writeln!(
