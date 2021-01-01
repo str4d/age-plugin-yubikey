@@ -14,9 +14,11 @@ edition = "2018"
 age-core = "0.5"
 age-plugin = "0.0"
 bech32 = "0.7.2"
+console = "0.14"
 elliptic-curve = "0.6"
 gumdrop = "0.8"
 p256 = "0.5"
+sha2 = "0.9"
 x509-parser = "0.9"
 yubikey-piv = { version = "0.1", features = ["untested"] }
 

@@ -4,7 +4,7 @@ use yubikey_piv::{
     Key, YubiKey,
 };
 
-use crate::PLUGIN_NAME;
+use crate::{p256::Recipient, yubikey::Stub, PLUGIN_NAME};
 
 const POLICY_EXTENSION_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 41482, 3, 8];
 
@@ -110,4 +110,15 @@ pub(crate) fn extract_name_and_policies(
             (name, pin_policy, touch_policy)
         }
     })
+}
+
+pub(crate) fn print_identity(stub: Stub, recipient: Recipient, created: &str) {
+    let recipient = recipient.to_string();
+    if !console::user_attended() {
+        eprintln!("Recipient: {}", recipient);
+    }
+
+    println!("# created: {}", created);
+    println!("# recipient: {}", recipient);
+    println!("{}", stub.to_string());
 }
