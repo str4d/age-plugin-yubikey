@@ -4,11 +4,18 @@ use std::io;
 pub enum Error {
     Io(io::Error),
     MultipleCommands,
+    YubiKey(yubikey_piv::Error),
 }
 
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Error::Io(e)
+    }
+}
+
+impl From<yubikey_piv::error::Error> for Error {
+    fn from(e: yubikey_piv::error::Error) -> Self {
+        Error::YubiKey(e)
     }
 }
 
@@ -22,6 +29,18 @@ impl fmt::Debug for Error {
                 f,
                 "Only one of --generate, --identity, --list, --list-all can be specified."
             )?,
+            Error::YubiKey(e) => match e {
+                yubikey_piv::error::Error::NotFound => {
+                    writeln!(f, "Please insert the YubiKey you want to set up")?
+                }
+                e => {
+                    writeln!(f, "Error while communicating with YubiKey: {}", e)?;
+                    use std::error::Error;
+                    if let Some(inner) = e.source() {
+                        writeln!(f, "Cause: {}", inner)?;
+                    }
+                }
+            },
         }
         writeln!(f)?;
         writeln!(
