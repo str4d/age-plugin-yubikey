@@ -4,9 +4,27 @@ use yubikey_piv::{
     Key, YubiKey,
 };
 
-use crate::{p256::Recipient, yubikey::Stub, PLUGIN_NAME};
+use crate::{error::Error, p256::Recipient, yubikey::Stub, PLUGIN_NAME};
 
-const POLICY_EXTENSION_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 41482, 3, 8];
+pub(crate) const POLICY_EXTENSION_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 41482, 3, 8];
+
+pub(crate) fn pin_policy_from_string(s: String) -> Result<PinPolicy, Error> {
+    match s.as_str() {
+        "always" => Ok(PinPolicy::Always),
+        "once" => Ok(PinPolicy::Once),
+        "never" => Ok(PinPolicy::Never),
+        _ => Err(Error::InvalidPinPolicy(s)),
+    }
+}
+
+pub(crate) fn touch_policy_from_string(s: String) -> Result<TouchPolicy, Error> {
+    match s.as_str() {
+        "always" => Ok(TouchPolicy::Always),
+        "cached" => Ok(TouchPolicy::Cached),
+        "never" => Ok(TouchPolicy::Never),
+        _ => Err(Error::InvalidTouchPolicy(s)),
+    }
+}
 
 pub(crate) fn pin_policy_to_str(policy: Option<PinPolicy>) -> &'static str {
     match policy {

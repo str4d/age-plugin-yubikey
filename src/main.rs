@@ -7,6 +7,7 @@ use yubikey_piv::{
     Key, Readers,
 };
 
+mod builder;
 mod error;
 mod p256;
 mod plugin;
@@ -54,6 +55,9 @@ struct PluginOptions {
     )]
     age_plugin: Option<String>,
 
+    #[options(help = "Force --generate to overwrite a filled slot.")]
+    force: bool,
+
     #[options(help = "Generate a new YubiKey identity.")]
     generate: bool,
 
@@ -67,6 +71,15 @@ struct PluginOptions {
     list_all: bool,
 
     #[options(
+        help = "Name for the generated identity. Defaults to 'age identity HEX_TAG'.",
+        no_short
+    )]
+    name: Option<String>,
+
+    #[options(help = "One of [always, once, never]. Defaults to 'once'.", no_short)]
+    pin_policy: Option<String>,
+
+    #[options(
         help = "Specify which YubiKey to use, if more than one is plugged in.",
         no_short
     )]
@@ -77,6 +90,46 @@ struct PluginOptions {
         no_short
     )]
     slot: Option<u8>,
+
+    #[options(
+        help = "One of [always, cached, never]. Defaults to 'always'.",
+        no_short
+    )]
+    touch_policy: Option<String>,
+}
+
+fn generate(opts: PluginOptions) -> Result<(), Error> {
+    let serial = opts.serial.map(|s| s.into());
+    let slot = opts
+        .slot
+        .map(|slot| {
+            USABLE_SLOTS
+                .get(slot as usize - 1)
+                .cloned()
+                .ok_or(Error::InvalidSlot(slot))
+        })
+        .transpose()?;
+    let pin_policy = opts
+        .pin_policy
+        .map(util::pin_policy_from_string)
+        .transpose()?;
+    let touch_policy = opts
+        .touch_policy
+        .map(util::touch_policy_from_string)
+        .transpose()?;
+
+    let mut yubikey = yubikey::open(serial)?;
+
+    let (stub, recipient, created) = builder::IdentityBuilder::new(slot)
+        .with_name(opts.name)
+        .with_pin_policy(pin_policy)
+        .with_touch_policy(touch_policy)
+        .force(opts.force)
+        .build(&mut yubikey)?;
+
+    util::print_identity(stub, recipient, &created);
+
+    Ok(())
 }
 
 fn identity(opts: PluginOptions) -> Result<(), Error> {
@@ -232,7 +285,7 @@ fn main() -> Result<(), Error> {
         )?;
         Ok(())
     } else if opts.generate {
-        todo!()
+        generate(opts)
     } else if opts.identity {
         identity(opts)
     } else if opts.list {

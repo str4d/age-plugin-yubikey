@@ -44,13 +44,18 @@ dependencies = [
  "age-core",
  "age-plugin",
  "bech32",
+ "chrono",
  "console",
+ "dialoguer",
  "elliptic-curve",
  "env_logger",
  "gumdrop",
+ "hex",
  "log",
  "p256",
+ "rand 0.8.3",
  "sha2",
+ "x509",
  "x509-parser",
  "yubikey-piv",
 ]
@@ -300,6 +305,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dialoguer"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9dd058f8b65922819fabb4a41e7d1964e56344042c26efbccd465202c23fa0c"
+dependencies = [
+ "console",
+ "lazy_static",
+ "tempfile",
+ "zeroize",
+]
+
+[[package]]
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -442,6 +459,12 @@ checksum = "322f4de77956e22ed0e5032c359a0f1273f1f7f0d79bfa3b8ffbc730d7fbcc5c"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hkdf"
