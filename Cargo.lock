@@ -43,6 +43,7 @@ version = "0.0.0"
 dependencies = [
  "age-core",
  "age-plugin",
+ "base64",
  "bech32",
  "chrono",
  "console",
@@ -52,7 +53,8 @@ dependencies = [
  "hex",
  "log",
  "p256",
- "rand 0.8.3",
+ "rand 0.7.3",
+ "secrecy",
  "sha2",
  "x509",
  "x509-parser",

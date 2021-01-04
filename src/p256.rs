@@ -33,6 +33,16 @@ impl fmt::Display for Recipient {
 }
 
 impl Recipient {
+    /// Attempts to parse a valid YubiKey recipient from its compressed SEC-1 byte encoding.
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        let encoded = p256::EncodedPoint::from_bytes(bytes).ok()?;
+        if encoded.is_compressed() {
+            Self::from_encoded(&encoded)
+        } else {
+            None
+        }
+    }
+
     /// Attempts to parse a valid YubiKey recipient from its SEC-1 encoding.
     ///
     /// This accepts both compressed (as used by the plugin) and uncompressed (as used in
@@ -49,5 +59,10 @@ impl Recipient {
     pub(crate) fn tag(&self) -> [u8; TAG_BYTES] {
         let tag = Sha256::digest(self.to_string().as_bytes());
         (&tag[0..TAG_BYTES]).try_into().expect("length is correct")
+    }
+
+    /// Exposes the wrapped public key.
+    pub(crate) fn public_key(&self) -> &p256::PublicKey {
+        &self.0
     }
 }
