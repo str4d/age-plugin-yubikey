@@ -9,7 +9,10 @@ use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use yubikey_piv::{
     certificate::{Certificate, PublicKeyInfo},
-    key::{generate as yubikey_generate, AlgorithmId, Key, RetiredSlotId, SlotId},
+    key::{
+        generate as yubikey_generate, import_ecc_key as yubikey_import, AlgorithmId, Key,
+        RetiredSlotId, SlotId,
+    },
     policy::{PinPolicy, TouchPolicy},
     MgmKey, Readers,
 };
@@ -296,21 +299,85 @@ fn main() -> Result<(), Error> {
                     yubikey.verify_pin(pin.as_bytes())?;
                 }
 
-                if let TouchPolicy::Never = touch_policy {
-                    // No need to touch YubiKey
-                } else {
-                    eprintln!("👆 Please touch the YubiKey");
-                }
+                let touch_prompt = || {
+                    if let TouchPolicy::Never = touch_policy {
+                        // No need to touch YubiKey
+                    } else {
+                        eprintln!("👆 Please touch the YubiKey");
+                    }
+                };
 
                 // Generate a new key in the selected slot.
-                let generated = yubikey_generate(
-                    &mut yubikey,
-                    SlotId::Retired(slot),
-                    AlgorithmId::EccP256,
-                    pin_policy,
-                    touch_policy,
-                )?;
+                let generated = match Select::new()
+                    .with_prompt("Select how the key should be generated")
+                    .items(&[
+                        "On the YubiKey  (The secure option, your computer never sees the private \
+                        key)",
+                        "On the computer (Less secure, you can backup the private key this way, \
+                        but the key can be exfiltrated or manipulated during import to the \
+                        YubiKey)",
+                        "Import existing (Also less secure, see above)",
+                    ])
+                    .default(0)
+                    .interact_opt()?
+                {
+                    Some(0) => {
+                        touch_prompt();
+                        yubikey_generate(
+                            &mut yubikey,
+                            SlotId::Retired(slot),
+                            AlgorithmId::EccP256,
+                            pin_policy,
+                            touch_policy,
+                        )?
+                    }
+                    Some(option @ 1..=2) => {
+                        let private_key = match option {
+                            1 => p256::PrivateKey::generate(),
+                            2 => {
+                                let private_key_input = Password::new()
+                                    .with_prompt("🔐 Enter the private key as a hex string")
+                                    .interact()?;
 
+                                match hex::decode(private_key_input) {
+                                    Ok(private_key_bytes) => {
+                                        match p256::PrivateKey::from_bytes(&private_key_bytes[..]) {
+                                            Some(private_key) => private_key,
+                                            None => {
+                                                eprintln!("Incorrect private key size");
+                                                return Ok(());
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        eprintln!("Private key must be a hex string");
+                                        return Ok(());
+                                    }
+                                }
+                            }
+                            _ => unreachable!(),
+                        };
+                        touch_prompt();
+                        yubikey_import(
+                            &mut yubikey,
+                            SlotId::Retired(slot),
+                            AlgorithmId::EccP256,
+                            private_key.to_bytes().as_ref(),
+                            touch_policy,
+                            pin_policy,
+                        )?;
+                        if option == 1 {
+                            eprintln!(
+                                "Your private key (keep it safe, secure and treat it with the care \
+                                it deserves, you don't need to use it directly as it's stored on \
+                                the YubiKey): {}",
+                                hex::encode(private_key.to_bytes()));
+                        }
+                        PublicKeyInfo::EcP256(private_key.to_pubkey())
+                    }
+                    Some(_) => unreachable!(),
+                    None => return Ok(()),
+                };
                 let mut serial = [0; 20];
                 OsRng.fill_bytes(&mut serial);
 

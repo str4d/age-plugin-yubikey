@@ -321,6 +321,7 @@ dependencies = [
  "group",
  "rand_core",
  "subtle",
+ "zeroize 1.2.0",
 ]
 
 [[package]]

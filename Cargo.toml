@@ -21,7 +21,7 @@ dialoguer = "0.7"
 elliptic-curve = "0.6"
 gumdrop = "0.8"
 hex = "0.4"
-p256 = "0.5"
+p256 = {version = "0.5", features = ["zeroize"]}
 rand = "0.7"
 ring = "0.16.15"
 secrecy = "0.7"

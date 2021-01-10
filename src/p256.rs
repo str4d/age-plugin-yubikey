@@ -1,5 +1,6 @@
 use elliptic_curve::sec1::EncodedPoint;
-use p256::NistP256;
+use p256::{NistP256, SecretKey};
+use rand::rngs::OsRng;
 use std::fmt;
 
 /// Wrapper around a compressed secp256r1 curve point.
@@ -41,5 +42,28 @@ impl PublicKey {
     /// Returns the uncompressed SEC-1 encoding of this public key.
     pub(crate) fn decompress(&self) -> EncodedPoint<NistP256> {
         self.0.decompress().unwrap()
+    }
+}
+
+pub struct PrivateKey(SecretKey);
+
+impl PrivateKey {
+    pub(crate) fn generate() -> PrivateKey {
+        PrivateKey(SecretKey::random(&mut OsRng))
+    }
+
+    pub(crate) fn to_bytes(&self) -> impl AsRef<[u8]> {
+        self.0.to_bytes()
+    }
+
+    pub(crate) fn to_pubkey(&self) -> EncodedPoint<NistP256> {
+        EncodedPoint::from_secret_key(&self.0, false)
+    }
+
+    pub(crate) fn from_bytes(bytes: impl AsRef<[u8]>) -> Option<PrivateKey> {
+        match SecretKey::from_bytes(bytes) {
+            Ok(secret_key) => Some(PrivateKey(secret_key)),
+            Err(_) => None,
+        }
     }
 }
