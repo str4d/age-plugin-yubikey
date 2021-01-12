@@ -1,5 +1,14 @@
 # YubiKey plugin for age
 
+Work in progress.
+
+Do not use this yet with a YubiKey you care about.
+
+Not even at a 0.1 release yet.
+
+Do not assume we will keep support for anything this currently may do to your YubiKey!
+We have a UX goal in mind, and will make breaking changes until we get there.
+
 ## License
 
 Licensed under either of
