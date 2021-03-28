@@ -1,6 +1,6 @@
 //! Structs for handling YubiKeys.
 
-use bech32::ToBase32;
+use bech32::{ToBase32, Variant};
 use std::fmt;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
@@ -81,10 +81,14 @@ pub struct Stub {
 impl fmt::Display for Stub {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(
-            bech32::encode(IDENTITY_PREFIX, self.to_bytes().to_base32())
-                .expect("HRP is valid")
-                .to_uppercase()
-                .as_str(),
+            bech32::encode(
+                IDENTITY_PREFIX,
+                self.to_bytes().to_base32(),
+                Variant::Bech32,
+            )
+            .expect("HRP is valid")
+            .to_uppercase()
+            .as_str(),
         )
     }
 }

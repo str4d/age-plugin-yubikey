@@ -31,7 +31,7 @@ version = "0.0.0"
 source = "git+https://github.com/str4d/rage.git?rev=d8fd951e059d9f7116b2b9dd0d176798a11b49f3#d8fd951e059d9f7116b2b9dd0d176798a11b49f3"
 dependencies = [
  "age-core",
- "bech32",
+ "bech32 0.7.3",
  "chrono",
  "secrecy",
 ]
@@ -42,7 +42,7 @@ version = "0.0.0"
 dependencies = [
  "age-core",
  "age-plugin",
- "bech32",
+ "bech32 0.8.0",
  "console",
  "elliptic-curve",
  "gumdrop",
@@ -87,6 +87,12 @@ name = "bech32"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dabbe35f96fb9507f7330793dc490461b2962659ac5d427181e451a623751d1"
+
+[[package]]
+name = "bech32"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c7f7096bc256f5e5cb960f60dfc4f4ef979ca65abe7fb9d5a4f77150d3783d4"
 
 [[package]]
 name = "bitflags"

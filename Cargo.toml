@@ -13,7 +13,7 @@ edition = "2018"
 [dependencies]
 age-core = "0.5"
 age-plugin = "0.0"
-bech32 = "0.7.2"
+bech32 = "0.8"
 console = "0.14"
 elliptic-curve = "0.8"
 gumdrop = "0.8"
