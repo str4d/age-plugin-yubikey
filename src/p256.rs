@@ -1,4 +1,4 @@
-use bech32::ToBase32;
+use bech32::{ToBase32, Variant};
 use elliptic_curve::sec1::EncodedPoint;
 use p256::NistP256;
 use sha2::{Digest, Sha256};
@@ -22,9 +22,13 @@ impl fmt::Debug for Recipient {
 impl fmt::Display for Recipient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(
-            bech32::encode(RECIPIENT_PREFIX, self.as_bytes().to_base32())
-                .expect("HRP is valid")
-                .as_str(),
+            bech32::encode(
+                RECIPIENT_PREFIX,
+                self.as_bytes().to_base32(),
+                Variant::Bech32,
+            )
+            .expect("HRP is valid")
+            .as_str(),
         )
     }
 }

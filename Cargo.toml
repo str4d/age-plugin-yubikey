@@ -13,15 +13,15 @@ edition = "2018"
 [dependencies]
 age-core = "0.5"
 age-plugin = "0.0"
-bech32 = "0.7.2"
+bech32 = "0.8"
 console = "0.14"
-elliptic-curve = "0.6"
+elliptic-curve = "0.8"
 gumdrop = "0.8"
-p256 = "0.5"
+p256 = "0.7"
 sha2 = "0.9"
 x509-parser = "0.9"
-yubikey-piv = { version = "0.1", features = ["untested"] }
+yubikey-piv = { version = "0.3", features = ["untested"] }
 
 [patch.crates-io]
-age-core = { git = "https://github.com/str4d/rage.git", rev = "d8fd951e059d9f7116b2b9dd0d176798a11b49f3" }
-age-plugin = { git = "https://github.com/str4d/rage.git", rev = "d8fd951e059d9f7116b2b9dd0d176798a11b49f3" }
+age-core = { git = "https://github.com/str4d/rage.git", rev = "a9b5e88aa5816b284ebea23fc84d0203a3c4fdbb" }
+age-plugin = { git = "https://github.com/str4d/rage.git", rev = "a9b5e88aa5816b284ebea23fc84d0203a3c4fdbb" }

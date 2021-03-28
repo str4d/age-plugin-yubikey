@@ -1,7 +1,8 @@
 use age_core::format::{FileKey, Stanza};
 use age_plugin::{
-    identity::{self, Callbacks, IdentityPluginV1},
+    identity::{self, IdentityPluginV1},
     recipient::{self, RecipientPluginV1},
+    Callbacks,
 };
 use std::collections::HashMap;
 use std::io;
@@ -17,7 +18,18 @@ impl RecipientPluginV1 for RecipientPlugin {
         todo!()
     }
 
-    fn wrap_file_key(&mut self, file_key: &FileKey) -> Result<Vec<Stanza>, Vec<recipient::Error>> {
+    fn add_identities<'a, I: Iterator<Item = &'a str>>(
+        &mut self,
+        identities: I,
+    ) -> Result<(), Vec<recipient::Error>> {
+        todo!()
+    }
+
+    fn wrap_file_keys(
+        &mut self,
+        file_keys: Vec<FileKey>,
+        callbacks: impl Callbacks<recipient::Error>,
+    ) -> io::Result<Result<Vec<Vec<Stanza>>, Vec<recipient::Error>>> {
         todo!()
     }
 }
@@ -36,7 +48,7 @@ impl IdentityPluginV1 for IdentityPlugin {
     fn unwrap_file_keys(
         &mut self,
         files: Vec<Vec<Stanza>>,
-        mut callbacks: impl Callbacks,
+        mut callbacks: impl Callbacks<identity::Error>,
     ) -> io::Result<HashMap<usize, Result<FileKey, Vec<identity::Error>>>> {
         todo!()
     }
