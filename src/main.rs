@@ -194,6 +194,12 @@ fn list(all: bool) -> Result<(), Error> {
 }
 
 fn main() -> Result<(), Error> {
+    env_logger::builder()
+        .format_timestamp(None)
+        .filter_level(log::LevelFilter::Off)
+        .parse_default_env()
+        .init();
+
     let opts = PluginOptions::parse_args_default_or_exit();
 
     if [opts.generate, opts.identity, opts.list, opts.list_all]
