@@ -1,12 +1,26 @@
 use x509_parser::{certificate::X509Certificate, der_parser::oid::Oid};
 use yubikey_piv::{
+    key::RetiredSlotId,
     policy::{PinPolicy, TouchPolicy},
     Key, YubiKey,
 };
 
-use crate::{error::Error, p256::Recipient, yubikey::Stub, PLUGIN_NAME};
+use crate::{error::Error, p256::Recipient, yubikey::Stub, PLUGIN_NAME, USABLE_SLOTS};
 
 pub(crate) const POLICY_EXTENSION_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 41482, 3, 8];
+
+pub(crate) fn ui_to_slot(slot: u8) -> Result<RetiredSlotId, Error> {
+    // Use 1-indexing in the UI for niceness
+    USABLE_SLOTS
+        .get(slot as usize - 1)
+        .cloned()
+        .ok_or(Error::InvalidSlot(slot))
+}
+
+pub(crate) fn slot_to_ui(slot: &RetiredSlotId) -> u8 {
+    // Use 1-indexing in the UI for niceness
+    USABLE_SLOTS.iter().position(|s| s == slot).unwrap() as u8 + 1
+}
 
 pub(crate) fn pin_policy_from_string(s: String) -> Result<PinPolicy, Error> {
     match s.as_str() {

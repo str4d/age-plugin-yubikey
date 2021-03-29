@@ -100,15 +100,7 @@ struct PluginOptions {
 
 fn generate(opts: PluginOptions) -> Result<(), Error> {
     let serial = opts.serial.map(|s| s.into());
-    let slot = opts
-        .slot
-        .map(|slot| {
-            USABLE_SLOTS
-                .get(slot as usize - 1)
-                .cloned()
-                .ok_or(Error::InvalidSlot(slot))
-        })
-        .transpose()?;
+    let slot = opts.slot.map(util::ui_to_slot).transpose()?;
     let pin_policy = opts
         .pin_policy
         .map(util::pin_policy_from_string)
@@ -134,15 +126,7 @@ fn generate(opts: PluginOptions) -> Result<(), Error> {
 
 fn identity(opts: PluginOptions) -> Result<(), Error> {
     let serial = opts.serial.map(|s| s.into());
-    let slot = opts
-        .slot
-        .map(|slot| {
-            USABLE_SLOTS
-                .get(slot as usize - 1)
-                .cloned()
-                .ok_or(Error::InvalidSlot(slot))
-        })
-        .transpose()?;
+    let slot = opts.slot.map(util::ui_to_slot).transpose()?;
 
     let mut yubikey = yubikey::open(serial)?;
 
@@ -240,8 +224,7 @@ fn list(all: bool) -> Result<(), Error> {
             println!(
                 "#       Serial: {}, Slot: {}",
                 yubikey.serial(),
-                // Use 1-indexing in the UI for niceness
-                USABLE_SLOTS.iter().position(|s| s == &slot).unwrap() + 1,
+                util::slot_to_ui(&slot),
             );
             println!("#         Name: {}", name);
             println!("#      Created: {}", created);

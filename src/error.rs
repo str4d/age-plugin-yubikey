@@ -2,7 +2,7 @@ use std::fmt;
 use std::io;
 use yubikey_piv::{key::RetiredSlotId, Serial};
 
-use crate::USABLE_SLOTS;
+use crate::util::slot_to_ui;
 
 pub enum Error {
     CustomManagementKey,
@@ -84,12 +84,12 @@ impl fmt::Debug for Error {
             Error::SlotHasNoIdentity(slot) => writeln!(
                 f,
                 "Slot {} does not contain an age identity or compatible key.",
-                USABLE_SLOTS.iter().position(|s| s == slot).unwrap() + 1
+                slot_to_ui(slot)
             )?,
             Error::SlotIsNotEmpty(slot) => writeln!(
                 f,
                 "Slot {} is not empty. Use --force to overwrite the slot.",
-                USABLE_SLOTS.iter().position(|s| s == slot).unwrap() + 1
+                slot_to_ui(slot)
             )?,
             Error::TimedOut => {
                 writeln!(f, "Timed out while waiting for a YubiKey to be inserted.")?
