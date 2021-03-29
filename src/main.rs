@@ -1,5 +1,6 @@
 use age_plugin::run_state_machine;
 use gumdrop::Options;
+use log::warn;
 use yubikey_piv::{
     certificate::PublicKeyInfo,
     key::{RetiredSlotId, SlotId},
@@ -142,7 +143,19 @@ fn list(all: bool) -> Result<(), Error> {
     let mut readers = Readers::open()?;
 
     for reader in readers.iter()? {
-        let mut yubikey = reader.open()?;
+        let mut yubikey = match reader.open() {
+            Ok(yk) => yk,
+            Err(e) => {
+                use std::error::Error;
+                let reason = if let Some(inner) = e.source() {
+                    format!("{}: {}", e, inner)
+                } else {
+                    e.to_string()
+                };
+                warn!("Ignoring {}: {}", reader.name(), reason);
+                continue;
+            }
+        };
 
         for key in Key::list(&mut yubikey)? {
             // We only use the retired slots.
@@ -194,6 +207,12 @@ fn list(all: bool) -> Result<(), Error> {
 }
 
 fn main() -> Result<(), Error> {
+    env_logger::builder()
+        .format_timestamp(None)
+        .filter_level(log::LevelFilter::Off)
+        .parse_default_env()
+        .init();
+
     let opts = PluginOptions::parse_args_default_or_exit();
 
     if [opts.generate, opts.identity, opts.list, opts.list_all]
