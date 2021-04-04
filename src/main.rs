@@ -265,8 +265,8 @@ fn main() -> Result<(), Error> {
     if let Some(state_machine) = opts.age_plugin {
         run_state_machine(
             &state_machine,
-            || plugin::RecipientPlugin::default(),
-            || plugin::IdentityPlugin::default(),
+            plugin::RecipientPlugin::default,
+            plugin::IdentityPlugin::default,
         )?;
         Ok(())
     } else if opts.generate {
@@ -279,17 +279,17 @@ fn main() -> Result<(), Error> {
         list(true)
     } else {
         eprintln!("✨ Let's get your YubiKey set up for age! ✨");
-        eprintln!("");
+        eprintln!();
         eprintln!("This tool can create a new age identity in a free slot of your YubiKey.");
         eprintln!("It will generate an identity file that you can use with an age client,");
         eprintln!("along with the corresponding recipient.");
-        eprintln!("");
+        eprintln!();
         eprintln!("If you are already using a YubiKey with age, you can select an existing");
         eprintln!("slot to recreate its corresponding identity file and recipient.");
-        eprintln!("");
+        eprintln!();
         eprintln!("When asked below to select an option, use the up/down arrow keys to");
         eprintln!("make your choice, or press [Esc] or [q] to quit.");
-        eprintln!("");
+        eprintln!();
 
         if Readers::open()?.iter()?.len() == 0 {
             eprintln!("⏳ Please insert the YubiKey you want to set up.");
@@ -299,8 +299,8 @@ fn main() -> Result<(), Error> {
         // Filter out readers we can't connect to.
         let readers_list: Vec<_> = readers
             .iter()?
-            .filter_map(|reader| match reader.open() {
-                Ok(_) => Some(reader),
+            .filter(|reader| match reader.open() {
+                Ok(_) => true,
                 Err(e) => {
                     use std::error::Error;
                     let reason = if let Some(inner) = e.source() {
@@ -309,7 +309,7 @@ fn main() -> Result<(), Error> {
                         e.to_string()
                     };
                     warn!("Ignoring {}: {}", reader.name(), reason);
-                    None
+                    false
                 }
             })
             .collect();

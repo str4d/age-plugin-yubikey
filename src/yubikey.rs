@@ -71,7 +71,7 @@ pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
 }
 
 pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
-    eprintln!("");
+    eprintln!();
     let pin = Password::new()
         .with_prompt(&format!(
             "Enter PIN for YubiKey with serial {} (default is 123456)",
@@ -82,15 +82,15 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
 
     // If the user is using the default PIN, help them to change it.
     if pin == "123456" {
-        eprintln!("");
+        eprintln!();
         eprintln!("✨ Your key is using the default PIN. Let's change it!");
         eprintln!("✨ We'll also set the PUK equal to the PIN.");
-        eprintln!("");
+        eprintln!();
         eprintln!("🔐 The PIN is up to 8 numbers, letters, or symbols. Not just numbers!");
         eprintln!(
             "❌ Your keys will be lost if the PIN and PUK are locked after 3 incorrect tries."
         );
-        eprintln!("");
+        eprintln!();
         let current_puk = Password::new()
             .with_prompt("Enter current PUK (default is 12345678)")
             .interact()?;

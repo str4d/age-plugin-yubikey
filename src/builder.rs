@@ -78,13 +78,9 @@ impl IdentityBuilder {
                 let keys = Key::list(yubikey)?;
                 USABLE_SLOTS
                     .iter()
-                    .find(|&&slot| {
-                        keys.iter()
-                            .find(|key| key.slot() == SlotId::Retired(slot))
-                            .is_none()
-                    })
+                    .find(|&&slot| !keys.iter().any(|key| key.slot() == SlotId::Retired(slot)))
                     .cloned()
-                    .ok_or(Error::NoEmptySlots(yubikey.serial()))?
+                    .ok_or_else(|| Error::NoEmptySlots(yubikey.serial()))?
             }
         };
 
