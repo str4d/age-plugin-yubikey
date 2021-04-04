@@ -47,7 +47,6 @@ dependencies = [
  "chrono",
  "console",
  "dialoguer",
- "elliptic-curve",
  "env_logger",
  "gumdrop",
  "hex",
