@@ -113,7 +113,7 @@ impl IdentityBuilder {
 
         let recipient = match &generated {
             PublicKeyInfo::EcP256(pubkey) => {
-                Recipient::from_pubkey(*pubkey).expect("YubiKey generates a valid pubkey")
+                Recipient::from_encoded(pubkey).expect("YubiKey generates a valid pubkey")
             }
             _ => unreachable!(),
         };

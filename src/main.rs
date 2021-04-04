@@ -137,7 +137,7 @@ fn identity(opts: PluginOptions) -> Result<(), Error> {
         // - Only P-256 keys are compatible with us.
         match (key.slot(), key.certificate().subject_pki()) {
             (SlotId::Retired(slot), PublicKeyInfo::EcP256(pubkey)) => {
-                p256::Recipient::from_pubkey(*pubkey).map(|r| (key, slot, r))
+                p256::Recipient::from_encoded(pubkey).map(|r| (key, slot, r))
             }
             _ => None,
         }
@@ -205,7 +205,7 @@ fn list(all: bool) -> Result<(), Error> {
 
             // Only P-256 keys are compatible with us.
             let recipient = match key.certificate().subject_pki() {
-                PublicKeyInfo::EcP256(pubkey) => match p256::Recipient::from_pubkey(*pubkey) {
+                PublicKeyInfo::EcP256(pubkey) => match p256::Recipient::from_encoded(pubkey) {
                     Some(recipient) => recipient,
                     None => continue,
                 },
@@ -342,7 +342,7 @@ fn main() -> Result<(), Error> {
                     .find(|key| key.slot() == SlotId::Retired(slot))
                     .map(|key| match key.certificate().subject_pki() {
                         PublicKeyInfo::EcP256(pubkey) => {
-                            p256::Recipient::from_pubkey(*pubkey).map(|_| {
+                            p256::Recipient::from_encoded(pubkey).map(|_| {
                                 // Cache the details we need to display to the user.
                                 let (_, cert) =
                                     x509_parser::parse_x509_certificate(key.certificate().as_ref())
@@ -394,7 +394,7 @@ fn main() -> Result<(), Error> {
             if let Some(key) = keys.iter().find(|key| key.slot() == SlotId::Retired(slot)) {
                 let recipient = match key.certificate().subject_pki() {
                     PublicKeyInfo::EcP256(pubkey) => {
-                        p256::Recipient::from_pubkey(*pubkey).expect("We checked this above")
+                        p256::Recipient::from_encoded(pubkey).expect("We checked this above")
                     }
                     _ => unreachable!(),
                 };
