@@ -20,7 +20,7 @@ jobs:
         name: [linux, windows, macos]
         include:
           - name: linux
-            os: ubuntu-latest
+            os: ubuntu-16.04
             build_deps: >
               libpcsclite-dev
             archive_name: age-plugin-yubikey.tar.gz
@@ -87,7 +87,7 @@ jobs:
 
   deb:
     name: Debian ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-16.04
     strategy:
       matrix:
         name: [linux]
