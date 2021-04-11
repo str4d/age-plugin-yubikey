@@ -31,6 +31,7 @@ jobs:
             target: armv7-unknown-linux-gnueabihf
             build_deps: >
               gcc-arm-linux-gnueabihf
+              libpcsclite-dev
             cargo_config: |
               [target.armv7-unknown-linux-gnueabihf]
               linker = "arm-linux-gnueabihf-gcc"
@@ -43,6 +44,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             build_deps: >
               gcc-aarch64-linux-gnu
+              libpcsclite-dev
             cargo_config: |
               [target.aarch64-unknown-linux-gnu]
               linker = "aarch64-linux-gnu-gcc"
