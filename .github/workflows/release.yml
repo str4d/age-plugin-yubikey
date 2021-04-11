@@ -84,3 +84,64 @@ jobs:
           tag: ${{ github.ref }}
           prerelease: true
         if: github.event.inputs.test != 'true'
+
+  deb:
+    name: Debian ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        name: [linux]
+        include:
+          - name: linux
+            target: x86_64-unknown-linux-gnu
+            build_deps: >
+              libpcsclite-dev
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+      - name: cargo install cargo-deb
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-deb
+
+      - name: Install build dependencies
+        run: sudo apt install ${{ matrix.build_deps }}
+        if: matrix.build_deps != ''
+
+      - name: Set up .cargo/config
+        run: |
+          mkdir .cargo
+          echo '${{ matrix.cargo_config }}' >.cargo/config
+        if: matrix.cargo_config != ''
+
+      - name: cargo build
+        run: cargo build --release --locked --target ${{ matrix.target }} ${{ matrix.build_flags }}
+
+      - name: Generate manpages
+        uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --example generate-docs
+
+      - name: cargo deb
+        uses: actions-rs/cargo@v1
+        with:
+          command: deb
+          args: --package age-plugin-yubikey --no-build --target ${{ matrix.target }}
+
+      - name: Upload Debian package to release
+        uses: svenstaro/upload-release-action@2.2.0
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/${{ matrix.target }}/debian/*.deb
+          tag: ${{ github.ref }}
+          file_glob: true
+          prerelease: true
+        if: github.event.inputs.test != 'true'
