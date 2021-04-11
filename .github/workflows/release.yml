@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        name: [linux, armv7, arm64, windows, macos]
+        name: [linux, windows, macos]
         include:
           - name: linux
             os: ubuntu-latest
@@ -25,32 +25,6 @@ jobs:
               libpcsclite-dev
             archive_name: age-plugin-yubikey.tar.gz
             asset_suffix: x86_64-linux.tar.gz
-
-          - name: armv7
-            os: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-            build_deps: >
-              gcc-arm-linux-gnueabihf
-              libpcsclite-dev
-            cargo_config: |
-              [target.armv7-unknown-linux-gnueabihf]
-              linker = "arm-linux-gnueabihf-gcc"
-            build_flags: --target armv7-unknown-linux-gnueabihf
-            archive_name: age-plugin-yubikey.tar.gz
-            asset_suffix: armv7-linux.tar.gz
-
-          - name: arm64
-            os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            build_deps: >
-              gcc-aarch64-linux-gnu
-              libpcsclite-dev
-            cargo_config: |
-              [target.aarch64-unknown-linux-gnu]
-              linker = "aarch64-linux-gnu-gcc"
-            build_flags: --target aarch64-unknown-linux-gnu
-            archive_name: age-plugin-yubikey.tar.gz
-            asset_suffix: arm64-linux.tar.gz
 
           - name: windows
             os: windows-latest
