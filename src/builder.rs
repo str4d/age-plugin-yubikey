@@ -123,7 +123,7 @@ impl IdentityBuilder {
             .name
             .unwrap_or(format!("age identity {}", hex::encode(stub.tag)));
 
-        Certificate::generate_self_signed(
+        let cert = Certificate::generate_self_signed(
             yubikey,
             SlotId::Retired(slot),
             serial,
@@ -140,10 +140,13 @@ impl IdentityBuilder {
             )],
         )?;
 
+        let (_, cert) = x509_parser::parse_x509_certificate(cert.as_ref()).unwrap();
+        let created = cert.validity().not_before.to_rfc2822();
+
         Ok((
             Stub::new(yubikey.serial(), slot, &recipient),
             recipient,
-            chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            created,
         ))
     }
 }

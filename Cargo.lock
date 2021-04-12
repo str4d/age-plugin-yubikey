@@ -51,7 +51,6 @@ dependencies = [
  "age-plugin",
  "base64",
  "bech32",
- "chrono",
  "console",
  "dialoguer",
  "env_logger",
