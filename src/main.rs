@@ -19,7 +19,7 @@ mod yubikey;
 
 use error::Error;
 
-const PLUGIN_NAME: &str = "age-plugin-yubikey";
+const BINARY_NAME: &str = "age-plugin-yubikey";
 const RECIPIENT_PREFIX: &str = "age1yubikey";
 const IDENTITY_PREFIX: &str = "age-plugin-yubikey-";
 const STANZA_TAG: &str = "piv-p256";
@@ -157,7 +157,7 @@ fn identity(opts: PluginOptions) -> Result<(), Error> {
                 .as_ref()
                 .and_then(|cert| cert.subject().iter_organization().next())
             {
-                Some(org) => org.as_str() == Ok(PLUGIN_NAME),
+                Some(org) => org.as_str() == Ok(BINARY_NAME),
                 _ => false,
             }
         });

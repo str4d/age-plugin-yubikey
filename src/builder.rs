@@ -12,7 +12,7 @@ use crate::{
     p256::Recipient,
     util::POLICY_EXTENSION_OID,
     yubikey::{self, Stub},
-    PLUGIN_NAME, USABLE_SLOTS,
+    BINARY_NAME, USABLE_SLOTS,
 };
 
 const DEFAULT_PIN_POLICY: PinPolicy = PinPolicy::Once;
@@ -129,7 +129,7 @@ impl IdentityBuilder {
             serial,
             None,
             &[
-                RelativeDistinguishedName::organization(PLUGIN_NAME),
+                RelativeDistinguishedName::organization(BINARY_NAME),
                 RelativeDistinguishedName::organizational_unit(env!("CARGO_PKG_VERSION")),
                 RelativeDistinguishedName::common_name(&name),
             ],
