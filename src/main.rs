@@ -19,6 +19,7 @@ mod yubikey;
 
 use error::Error;
 
+const PLUGIN_NAME: &str = "yubikey";
 const BINARY_NAME: &str = "age-plugin-yubikey";
 const RECIPIENT_PREFIX: &str = "age1yubikey";
 const IDENTITY_PREFIX: &str = "age-plugin-yubikey-";

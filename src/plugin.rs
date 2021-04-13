@@ -4,11 +4,10 @@ use age_plugin::{
     recipient::{self, RecipientPluginV1},
     Callbacks,
 };
-use bech32::{FromBase32, Variant};
 use std::collections::HashMap;
 use std::io;
 
-use crate::{format, p256::Recipient, yubikey, IDENTITY_PREFIX, RECIPIENT_PREFIX};
+use crate::{format, p256::Recipient, yubikey, PLUGIN_NAME};
 
 #[derive(Debug, Default)]
 pub(crate) struct RecipientPlugin {
@@ -17,75 +16,45 @@ pub(crate) struct RecipientPlugin {
 }
 
 impl RecipientPluginV1 for RecipientPlugin {
-    fn add_recipients<'a, I: Iterator<Item = &'a str>>(
+    fn add_recipient(
         &mut self,
-        recipients: I,
-    ) -> Result<(), Vec<recipient::Error>> {
-        let errors: Vec<_> = recipients
-            .enumerate()
-            .filter_map(|(index, recipient)| {
-                if let Some(pk) = bech32::decode(recipient)
-                    .ok()
-                    .and_then(|(hrp, data, variant)| {
-                        if hrp == RECIPIENT_PREFIX && variant == Variant::Bech32 {
-                            Some(data)
-                        } else {
-                            None
-                        }
-                    })
-                    .and_then(|data| Vec::from_base32(&data).ok())
-                    .and_then(|bytes| Recipient::from_bytes(&bytes))
-                {
-                    self.recipients.push(pk);
-                    None
-                } else {
-                    Some(recipient::Error::Recipient {
-                        index,
-                        message: "Invalid recipient".to_owned(),
-                    })
-                }
-            })
-            .collect();
-        if errors.is_empty() {
+        index: usize,
+        plugin_name: &str,
+        bytes: &[u8],
+    ) -> Result<(), recipient::Error> {
+        if let Some(pk) = if plugin_name == PLUGIN_NAME {
+            Recipient::from_bytes(&bytes)
+        } else {
+            None
+        } {
+            self.recipients.push(pk);
             Ok(())
         } else {
-            Err(errors)
+            Err(recipient::Error::Recipient {
+                index,
+                message: "Invalid recipient".to_owned(),
+            })
         }
     }
 
-    fn add_identities<'a, I: Iterator<Item = &'a str>>(
+    fn add_identity(
         &mut self,
-        identities: I,
-    ) -> Result<(), Vec<recipient::Error>> {
-        let errors: Vec<_> = identities
-            .enumerate()
-            .filter_map(|(index, identity)| {
-                if let Some(stub) = bech32::decode(identity)
-                    .ok()
-                    .and_then(|(hrp, data, variant)| {
-                        if hrp == IDENTITY_PREFIX.to_lowercase() && variant == Variant::Bech32 {
-                            Some(data)
-                        } else {
-                            None
-                        }
-                    })
-                    .and_then(|data| Vec::from_base32(&data).ok())
-                    .and_then(|bytes| yubikey::Stub::from_bytes(&bytes, index))
-                {
-                    self.yubikeys.push(stub);
-                    None
-                } else {
-                    Some(recipient::Error::Identity {
-                        index,
-                        message: "Invalid Yubikey stub".to_owned(),
-                    })
-                }
-            })
-            .collect();
-        if errors.is_empty() {
+        index: usize,
+        plugin_name: &str,
+        bytes: &[u8],
+    ) -> Result<(), recipient::Error> {
+        if let Some(stub) = if plugin_name == PLUGIN_NAME {
+            yubikey::Stub::from_bytes(&bytes, index)
+        } else {
+            None
+        } {
+            self.yubikeys.push(stub);
             Ok(())
         } else {
-            Err(errors)
+            Err(recipient::Error::Identity {
+                index,
+                message: "Invalid Yubikey stub".to_owned(),
+            })
         }
     }
 
@@ -135,39 +104,24 @@ pub(crate) struct IdentityPlugin {
 }
 
 impl IdentityPluginV1 for IdentityPlugin {
-    fn add_identities<'a, I: Iterator<Item = &'a str>>(
+    fn add_identity(
         &mut self,
-        identities: I,
-    ) -> Result<(), Vec<identity::Error>> {
-        let errors: Vec<_> = identities
-            .enumerate()
-            .filter_map(|(index, identity)| {
-                if let Some(stub) = bech32::decode(identity)
-                    .ok()
-                    .and_then(|(hrp, data, variant)| {
-                        if hrp == IDENTITY_PREFIX.to_lowercase() && variant == Variant::Bech32 {
-                            Some(data)
-                        } else {
-                            None
-                        }
-                    })
-                    .and_then(|data| Vec::from_base32(&data).ok())
-                    .and_then(|bytes| yubikey::Stub::from_bytes(&bytes, index))
-                {
-                    self.yubikeys.push(stub);
-                    None
-                } else {
-                    Some(identity::Error::Identity {
-                        index,
-                        message: "Invalid Yubikey stub".to_owned(),
-                    })
-                }
-            })
-            .collect();
-        if errors.is_empty() {
+        index: usize,
+        plugin_name: &str,
+        bytes: &[u8],
+    ) -> Result<(), identity::Error> {
+        if let Some(stub) = if plugin_name == PLUGIN_NAME {
+            yubikey::Stub::from_bytes(&bytes, index)
+        } else {
+            None
+        } {
+            self.yubikeys.push(stub);
             Ok(())
         } else {
-            Err(errors)
+            Err(identity::Error::Identity {
+                index,
+                message: "Invalid Yubikey stub".to_owned(),
+            })
         }
     }
 
