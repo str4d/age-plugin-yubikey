@@ -18,7 +18,7 @@ dependencies = [
 [[package]]
 name = "age-core"
 version = "0.5.0"
-source = "git+https://github.com/str4d/rage.git?rev=a9b5e88aa5816b284ebea23fc84d0203a3c4fdbb#a9b5e88aa5816b284ebea23fc84d0203a3c4fdbb"
+source = "git+https://github.com/str4d/rage.git?rev=4aa52a2dbb5feed86dcafa3afe8d554975ca5518#4aa52a2dbb5feed86dcafa3afe8d554975ca5518"
 dependencies = [
  "base64",
  "c2-chacha",
@@ -35,7 +35,7 @@ dependencies = [
 [[package]]
 name = "age-plugin"
 version = "0.0.0"
-source = "git+https://github.com/str4d/rage.git?rev=a9b5e88aa5816b284ebea23fc84d0203a3c4fdbb#a9b5e88aa5816b284ebea23fc84d0203a3c4fdbb"
+source = "git+https://github.com/str4d/rage.git?rev=4aa52a2dbb5feed86dcafa3afe8d554975ca5518#4aa52a2dbb5feed86dcafa3afe8d554975ca5518"
 dependencies = [
  "age-core",
  "bech32",
@@ -51,7 +51,6 @@ dependencies = [
  "age-plugin",
  "base64",
  "bech32",
- "chrono",
  "console",
  "dialoguer",
  "env_logger",

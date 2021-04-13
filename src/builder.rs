@@ -12,7 +12,7 @@ use crate::{
     p256::Recipient,
     util::POLICY_EXTENSION_OID,
     yubikey::{self, Stub},
-    PLUGIN_NAME, USABLE_SLOTS,
+    BINARY_NAME, USABLE_SLOTS,
 };
 
 const DEFAULT_PIN_POLICY: PinPolicy = PinPolicy::Once;
@@ -123,13 +123,13 @@ impl IdentityBuilder {
             .name
             .unwrap_or(format!("age identity {}", hex::encode(stub.tag)));
 
-        Certificate::generate_self_signed(
+        let cert = Certificate::generate_self_signed(
             yubikey,
             SlotId::Retired(slot),
             serial,
             None,
             &[
-                RelativeDistinguishedName::organization(PLUGIN_NAME),
+                RelativeDistinguishedName::organization(BINARY_NAME),
                 RelativeDistinguishedName::organizational_unit(env!("CARGO_PKG_VERSION")),
                 RelativeDistinguishedName::common_name(&name),
             ],
@@ -140,10 +140,13 @@ impl IdentityBuilder {
             )],
         )?;
 
+        let (_, cert) = x509_parser::parse_x509_certificate(cert.as_ref()).unwrap();
+        let created = cert.validity().not_before.to_rfc2822();
+
         Ok((
             Stub::new(yubikey.serial(), slot, &recipient),
             recipient,
-            chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            created,
         ))
     }
 }
