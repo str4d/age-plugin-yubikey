@@ -60,6 +60,7 @@ dependencies = [
  "log",
  "man",
  "p256",
+ "pcsc",
  "rand 0.7.3",
  "secrecy",
  "sha2",

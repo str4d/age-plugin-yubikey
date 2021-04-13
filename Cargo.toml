@@ -33,6 +33,7 @@ gumdrop = "0.8"
 hex = "0.4"
 log = "0.4"
 p256 = { version = "0.7", features = ["ecdh"] }
+pcsc = "2.4"
 rand = "0.7"
 secrecy = "0.7"
 sha2 = "0.9"

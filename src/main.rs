@@ -1,7 +1,6 @@
 use age_plugin::run_state_machine;
 use dialoguer::{Confirm, Select};
 use gumdrop::Options;
-use log::warn;
 use yubikey_piv::{
     certificate::PublicKeyInfo,
     key::{RetiredSlotId, SlotId},
@@ -184,20 +183,8 @@ fn identity(opts: PluginOptions) -> Result<(), Error> {
 fn list(all: bool) -> Result<(), Error> {
     let mut readers = Readers::open()?;
 
-    for reader in readers.iter()? {
-        let mut yubikey = match reader.open() {
-            Ok(yk) => yk,
-            Err(e) => {
-                use std::error::Error;
-                let reason = if let Some(inner) = e.source() {
-                    format!("{}: {}", e, inner)
-                } else {
-                    e.to_string()
-                };
-                warn!("Ignoring {}: {}", reader.name(), reason);
-                continue;
-            }
-        };
+    for reader in readers.iter()?.filter(yubikey::filter_connected) {
+        let mut yubikey = reader.open()?;
 
         for key in Key::list(&mut yubikey)? {
             // We only use the retired slots.
@@ -294,28 +281,18 @@ fn main() -> Result<(), Error> {
         eprintln!("make your choice, or press [Esc] or [q] to quit.");
         eprintln!();
 
-        if Readers::open()?.iter()?.len() == 0 {
+        if Readers::open()?
+            .iter()?
+            .filter(yubikey::filter_connected)
+            .next()
+            .is_none()
+        {
             eprintln!("⏳ Please insert the YubiKey you want to set up.");
         };
         let mut readers = yubikey::wait_for_readers()?;
 
         // Filter out readers we can't connect to.
-        let readers_list: Vec<_> = readers
-            .iter()?
-            .filter(|reader| match reader.open() {
-                Ok(_) => true,
-                Err(e) => {
-                    use std::error::Error;
-                    let reason = if let Some(inner) = e.source() {
-                        format!("{}: {}", e, inner)
-                    } else {
-                        e.to_string()
-                    };
-                    warn!("Ignoring {}: {}", reader.name(), reason);
-                    false
-                }
-            })
-            .collect();
+        let readers_list: Vec<_> = readers.iter()?.filter(yubikey::filter_connected).collect();
 
         let reader_names = readers_list
             .iter()
