@@ -125,7 +125,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
     // If the user is using the default PIN, help them to change it.
     if pin == "123456" {
         eprintln!();
-        eprintln!("✨ Your key is using the default PIN. Let's change it!");
+        eprintln!("✨ Your YubiKey is using the default PIN. Let's change it!");
         eprintln!("✨ We'll also set the PUK equal to the PIN.");
         eprintln!();
         eprintln!("🔐 The PIN is up to 8 numbers, letters, or symbols. Not just numbers!");
@@ -157,7 +157,17 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
 
         // Migrate to a PIN-protected management key.
         let mgm_key = MgmKey::generate()?;
-        mgm_key.set_protected(yubikey)?;
+        eprintln!();
+        eprintln!("✨ Your YubiKey is using the default management key.");
+        eprintln!("✨ We'll migrate it to a PIN-protected management key.");
+        eprint!("... ");
+        mgm_key.set_protected(yubikey).map_err(|e| {
+            eprintln!("An error occurred while setting the new management key.");
+            eprintln!("⚠️ SAVE THIS MANAGEMENT KEY - YOU MAY NEED IT TO MANAGE YOUR YubiKey! ⚠️");
+            eprintln!("  {}", hex::encode(mgm_key.as_ref()));
+            e
+        })?;
+        eprintln!("Success!");
     }
 
     Ok(())
