@@ -52,6 +52,9 @@ struct PluginOptions {
     #[options(help = "Print this help message and exit.")]
     help: bool,
 
+    #[options(help = "Print version info and exit.", short = "V")]
+    version: bool,
+
     #[options(
         help = "Run the given age plugin state machine. Internal use only.",
         meta = "STATE-MACHINE",
@@ -258,6 +261,9 @@ fn main() -> Result<(), Error> {
             plugin::RecipientPlugin::default,
             plugin::IdentityPlugin::default,
         )?;
+        Ok(())
+    } else if opts.version {
+        println!("age-plugin-yubikey {}", env!("CARGO_PKG_VERSION"));
         Ok(())
     } else if opts.generate {
         generate(opts)
