@@ -7,15 +7,18 @@ use age_core::{
 use age_plugin::{identity, Callbacks};
 use bech32::{ToBase32, Variant};
 use dialoguer::Password;
+use log::warn;
 use secrecy::ExposeSecret;
 use std::convert::TryInto;
 use std::fmt;
 use std::io;
+use std::iter;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use yubikey_piv::{
     certificate::{Certificate, PublicKeyInfo},
     key::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
+    readers::Reader,
     yubikey::Serial,
     MgmKey, Readers, YubiKey,
 };
@@ -30,12 +33,33 @@ use crate::{
 const ONE_SECOND: Duration = Duration::from_secs(1);
 const FIFTEEN_SECONDS: Duration = Duration::from_secs(15);
 
+pub(crate) fn is_connected(reader: Reader) -> bool {
+    filter_connected(&reader)
+}
+
+pub(crate) fn filter_connected(reader: &Reader) -> bool {
+    match reader.open() {
+        Ok(_) => true,
+        Err(e) => {
+            use std::error::Error;
+            if let Some(pcsc::Error::RemovedCard) =
+                e.source().and_then(|inner| inner.downcast_ref())
+            {
+                warn!("Ignoring {}: not connected", reader.name());
+                false
+            } else {
+                true
+            }
+        }
+    }
+}
+
 pub(crate) fn wait_for_readers() -> Result<Readers, Error> {
     // Start a 15-second timer waiting for a YubiKey to be inserted (if necessary).
     let start = SystemTime::now();
     loop {
         let mut readers = Readers::open()?;
-        if readers.iter()?.len() > 0 {
+        if readers.iter()?.any(is_connected) {
             break Ok(readers);
         }
 
@@ -47,7 +71,7 @@ pub(crate) fn wait_for_readers() -> Result<Readers, Error> {
 }
 
 pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
-    if Readers::open()?.iter()?.len() == 0 {
+    if !Readers::open()?.iter()?.any(is_connected) {
         if let Some(serial) = serial {
             eprintln!("⏳ Please insert the YubiKey with serial {}.", serial);
         } else {
@@ -55,22 +79,25 @@ pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
         }
     }
     let mut readers = wait_for_readers()?;
-    let mut readers_iter = readers.iter()?;
+    let mut readers_iter = readers.iter()?.filter(filter_connected);
 
     // --serial selects the YubiKey to use. If not provided, and more than one YubiKey is
     // connected, an error is returned.
-    let yubikey = match (readers_iter.len(), serial) {
-        (0, _) => unreachable!(),
-        (1, None) => readers_iter.next().unwrap().open()?,
-        (1, Some(serial)) => {
-            let yubikey = readers_iter.next().unwrap().open()?;
+    let yubikey = match (readers_iter.next(), readers_iter.next(), serial) {
+        (None, _, _) => unreachable!(),
+        (Some(reader), None, None) => reader.open()?,
+        (Some(reader), None, Some(serial)) => {
+            let yubikey = reader.open()?;
             if yubikey.serial() != serial {
                 return Err(Error::NoMatchingSerial(serial));
             }
             yubikey
         }
-        (_, Some(serial)) => {
-            let reader = readers_iter
+        (Some(a), Some(b), Some(serial)) => {
+            let reader = iter::empty()
+                .chain(Some(a))
+                .chain(Some(b))
+                .chain(readers_iter)
                 .find(|reader| match reader.open() {
                     Ok(yk) => yk.serial() == serial,
                     _ => false,
@@ -78,7 +105,7 @@ pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
                 .ok_or(Error::NoMatchingSerial(serial))?;
             reader.open()?
         }
-        (_, None) => return Err(Error::MultipleYubiKeys),
+        (Some(_), Some(_), None) => return Err(Error::MultipleYubiKeys),
     };
 
     Ok(yubikey)
@@ -97,7 +124,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
     // If the user is using the default PIN, help them to change it.
     if pin == "123456" {
         eprintln!();
-        eprintln!("✨ Your key is using the default PIN. Let's change it!");
+        eprintln!("✨ Your YubiKey is using the default PIN. Let's change it!");
         eprintln!("✨ We'll also set the PUK equal to the PIN.");
         eprintln!();
         eprintln!("🔐 The PIN is up to 8 numbers, letters, or symbols. Not just numbers!");
@@ -129,7 +156,17 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
 
         // Migrate to a PIN-protected management key.
         let mgm_key = MgmKey::generate()?;
-        mgm_key.set_protected(yubikey)?;
+        eprintln!();
+        eprintln!("✨ Your YubiKey is using the default management key.");
+        eprintln!("✨ We'll migrate it to a PIN-protected management key.");
+        eprint!("... ");
+        mgm_key.set_protected(yubikey).map_err(|e| {
+            eprintln!("An error occurred while setting the new management key.");
+            eprintln!("⚠️ SAVE THIS MANAGEMENT KEY - YOU MAY NEED IT TO MANAGE YOUR YubiKey! ⚠️");
+            eprintln!("  {}", hex::encode(mgm_key.as_ref()));
+            e
+        })?;
+        eprintln!("Success!");
     }
 
     Ok(())

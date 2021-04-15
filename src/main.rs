@@ -1,7 +1,6 @@
 use age_plugin::run_state_machine;
 use dialoguer::{Confirm, Select};
 use gumdrop::Options;
-use log::warn;
 use yubikey_piv::{
     certificate::PublicKeyInfo,
     key::{RetiredSlotId, SlotId},
@@ -52,6 +51,9 @@ const USABLE_SLOTS: [RetiredSlotId; 20] = [
 struct PluginOptions {
     #[options(help = "Print this help message and exit.")]
     help: bool,
+
+    #[options(help = "Print version info and exit.", short = "V")]
+    version: bool,
 
     #[options(
         help = "Run the given age plugin state machine. Internal use only.",
@@ -184,20 +186,8 @@ fn identity(opts: PluginOptions) -> Result<(), Error> {
 fn list(all: bool) -> Result<(), Error> {
     let mut readers = Readers::open()?;
 
-    for reader in readers.iter()? {
-        let mut yubikey = match reader.open() {
-            Ok(yk) => yk,
-            Err(e) => {
-                use std::error::Error;
-                let reason = if let Some(inner) = e.source() {
-                    format!("{}: {}", e, inner)
-                } else {
-                    e.to_string()
-                };
-                warn!("Ignoring {}: {}", reader.name(), reason);
-                continue;
-            }
-        };
+    for reader in readers.iter()?.filter(yubikey::filter_connected) {
+        let mut yubikey = reader.open()?;
 
         for key in Key::list(&mut yubikey)? {
             // We only use the retired slots.
@@ -272,6 +262,9 @@ fn main() -> Result<(), Error> {
             plugin::IdentityPlugin::default,
         )?;
         Ok(())
+    } else if opts.version {
+        println!("age-plugin-yubikey {}", env!("CARGO_PKG_VERSION"));
+        Ok(())
     } else if opts.generate {
         generate(opts)
     } else if opts.identity {
@@ -285,37 +278,26 @@ fn main() -> Result<(), Error> {
         eprintln!();
         eprintln!("This tool can create a new age identity in a free slot of your YubiKey.");
         eprintln!("It will generate an identity file that you can use with an age client,");
-        eprintln!("along with the corresponding recipient.");
+        eprintln!("along with the corresponding recipient. You can also do this directly");
+        eprintln!("with:");
+        eprintln!("    age-plugin-yubikey --generate");
         eprintln!();
         eprintln!("If you are already using a YubiKey with age, you can select an existing");
-        eprintln!("slot to recreate its corresponding identity file and recipient.");
+        eprintln!("slot to recreate its corresponding identity file and recipient. You can");
+        eprintln!("also obtain this directly with:");
+        eprintln!("    age-plugin-yubikey --identity");
         eprintln!();
         eprintln!("When asked below to select an option, use the up/down arrow keys to");
         eprintln!("make your choice, or press [Esc] or [q] to quit.");
         eprintln!();
 
-        if Readers::open()?.iter()?.len() == 0 {
+        if !Readers::open()?.iter()?.any(yubikey::is_connected) {
             eprintln!("⏳ Please insert the YubiKey you want to set up.");
         };
         let mut readers = yubikey::wait_for_readers()?;
 
         // Filter out readers we can't connect to.
-        let readers_list: Vec<_> = readers
-            .iter()?
-            .filter(|reader| match reader.open() {
-                Ok(_) => true,
-                Err(e) => {
-                    use std::error::Error;
-                    let reason = if let Some(inner) = e.source() {
-                        format!("{}: {}", e, inner)
-                    } else {
-                        e.to_string()
-                    };
-                    warn!("Ignoring {}: {}", reader.name(), reason);
-                    false
-                }
-            })
-            .collect();
+        let readers_list: Vec<_> = readers.iter()?.filter(yubikey::filter_connected).collect();
 
         let reader_names = readers_list
             .iter()
