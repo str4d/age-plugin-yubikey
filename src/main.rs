@@ -278,10 +278,14 @@ fn main() -> Result<(), Error> {
         eprintln!();
         eprintln!("This tool can create a new age identity in a free slot of your YubiKey.");
         eprintln!("It will generate an identity file that you can use with an age client,");
-        eprintln!("along with the corresponding recipient.");
+        eprintln!("along with the corresponding recipient. You can also do this directly");
+        eprintln!("with:");
+        eprintln!("    age-plugin-yubikey --generate");
         eprintln!();
         eprintln!("If you are already using a YubiKey with age, you can select an existing");
-        eprintln!("slot to recreate its corresponding identity file and recipient.");
+        eprintln!("slot to recreate its corresponding identity file and recipient. You can");
+        eprintln!("also obtain this directly with:");
+        eprintln!("    age-plugin-yubikey --identity");
         eprintln!();
         eprintln!("When asked below to select an option, use the up/down arrow keys to");
         eprintln!("make your choice, or press [Esc] or [q] to quit.");
