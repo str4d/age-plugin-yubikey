@@ -33,6 +33,10 @@ use crate::{
 const ONE_SECOND: Duration = Duration::from_secs(1);
 const FIFTEEN_SECONDS: Duration = Duration::from_secs(15);
 
+pub(crate) fn is_connected(reader: Reader) -> bool {
+    filter_connected(&reader)
+}
+
 pub(crate) fn filter_connected(reader: &Reader) -> bool {
     match reader.open() {
         Ok(_) => true,
@@ -55,7 +59,7 @@ pub(crate) fn wait_for_readers() -> Result<Readers, Error> {
     let start = SystemTime::now();
     loop {
         let mut readers = Readers::open()?;
-        if readers.iter()?.filter(filter_connected).next().is_some() {
+        if readers.iter()?.any(is_connected) {
             break Ok(readers);
         }
 
@@ -67,12 +71,7 @@ pub(crate) fn wait_for_readers() -> Result<Readers, Error> {
 }
 
 pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
-    if Readers::open()?
-        .iter()?
-        .filter(filter_connected)
-        .next()
-        .is_none()
-    {
+    if !Readers::open()?.iter()?.any(is_connected) {
         if let Some(serial) = serial {
             eprintln!("⏳ Please insert the YubiKey with serial {}.", serial);
         } else {

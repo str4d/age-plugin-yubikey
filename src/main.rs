@@ -291,12 +291,7 @@ fn main() -> Result<(), Error> {
         eprintln!("make your choice, or press [Esc] or [q] to quit.");
         eprintln!();
 
-        if Readers::open()?
-            .iter()?
-            .filter(yubikey::filter_connected)
-            .next()
-            .is_none()
-        {
+        if !Readers::open()?.iter()?.any(yubikey::is_connected) {
             eprintln!("⏳ Please insert the YubiKey you want to set up.");
         };
         let mut readers = yubikey::wait_for_readers()?;
