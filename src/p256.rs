@@ -57,7 +57,7 @@ impl Recipient {
     }
 
     pub(crate) fn tag(&self) -> [u8; TAG_BYTES] {
-        let tag = Sha256::digest(self.to_string().as_bytes());
+        let tag = Sha256::digest(self.to_encoded().as_bytes());
         (&tag[0..TAG_BYTES]).try_into().expect("length is correct")
     }
 
