@@ -119,14 +119,14 @@ fn generate(opts: PluginOptions) -> Result<(), Error> {
 
     let mut yubikey = yubikey::open(serial)?;
 
-    let (stub, recipient, created) = builder::IdentityBuilder::new(slot)
+    let (stub, recipient, metadata) = builder::IdentityBuilder::new(slot)
         .with_name(opts.name)
         .with_pin_policy(pin_policy)
         .with_touch_policy(touch_policy)
         .force(opts.force)
         .build(&mut yubikey)?;
 
-    util::print_identity(stub, recipient, &created);
+    util::print_identity(stub, recipient, metadata);
 
     Ok(())
 }
@@ -173,12 +173,12 @@ fn identity(opts: PluginOptions) -> Result<(), Error> {
     }?;
 
     let stub = yubikey::Stub::new(yubikey.serial(), slot, &recipient);
-    let created = x509_parser::parse_x509_certificate(key.certificate().as_ref())
+    let metadata = x509_parser::parse_x509_certificate(key.certificate().as_ref())
         .ok()
-        .map(|(_, cert)| cert.validity().not_before.to_rfc2822())
-        .unwrap_or_else(|| "Unknown".to_owned());
+        .and_then(|(_, cert)| util::Metadata::extract(&mut yubikey, slot, &cert, true))
+        .unwrap();
 
-    util::print_identity(stub, recipient, &created);
+    util::print_identity(stub, recipient, metadata);
 
     Ok(())
 }
@@ -205,29 +205,15 @@ fn list(all: bool) -> Result<(), Error> {
                 _ => continue,
             };
 
-            let ((name, pin_policy, touch_policy), created) =
-                match x509_parser::parse_x509_certificate(key.certificate().as_ref())
-                    .ok()
-                    .and_then(|(_, cert)| {
-                        util::extract_name_and_policies(&mut yubikey, &key, &cert, all)
-                            .map(|res| (res, cert.validity().not_before.to_rfc2822()))
-                    }) {
-                    Some(res) => res,
-                    None => continue,
-                };
+            let metadata = match x509_parser::parse_x509_certificate(key.certificate().as_ref())
+                .ok()
+                .and_then(|(_, cert)| util::Metadata::extract(&mut yubikey, slot, &cert, all))
+            {
+                Some(res) => res,
+                None => continue,
+            };
 
-            println!(
-                "#       Serial: {}, Slot: {}",
-                yubikey.serial(),
-                util::slot_to_ui(&slot),
-            );
-            println!("#         Name: {}", name);
-            println!("#      Created: {}", created);
-            println!("#   PIN policy: {}", util::pin_policy_to_str(pin_policy));
-            println!(
-                "# Touch policy: {}",
-                util::touch_policy_to_str(touch_policy)
-            );
+            println!("{}", metadata);
             println!("{}", recipient.to_string());
             println!();
         }
@@ -358,7 +344,7 @@ fn main() -> Result<(), Error> {
             })
             .collect();
 
-        let (stub, recipient, created) = {
+        let (stub, recipient, metadata) = {
             let (slot_index, slot) = loop {
                 match Select::new()
                     .with_prompt("🕳️  Select a slot for your age identity")
@@ -391,9 +377,10 @@ fn main() -> Result<(), Error> {
                     let stub = yubikey::Stub::new(yubikey.serial(), slot, &recipient);
                     let (_, cert) =
                         x509_parser::parse_x509_certificate(key.certificate().as_ref()).unwrap();
-                    let created = cert.validity().not_before.to_rfc2822();
+                    let metadata =
+                        util::Metadata::extract(&mut yubikey, slot, &cert, true).unwrap();
 
-                    (stub, recipient, created)
+                    (stub, recipient, metadata)
                 } else {
                     return Ok(());
                 }
@@ -449,7 +436,7 @@ fn main() -> Result<(), Error> {
             }
         };
 
-        util::print_identity(stub, recipient, &created);
+        util::print_identity(stub, recipient, metadata);
 
         Ok(())
     }

@@ -10,7 +10,7 @@ use yubikey_piv::{
 use crate::{
     error::Error,
     p256::Recipient,
-    util::POLICY_EXTENSION_OID,
+    util::{Metadata, POLICY_EXTENSION_OID},
     yubikey::{self, Stub},
     BINARY_NAME, USABLE_SLOTS,
 };
@@ -57,7 +57,7 @@ impl IdentityBuilder {
         self
     }
 
-    pub(crate) fn build(self, yubikey: &mut YubiKey) -> Result<(Stub, Recipient, String), Error> {
+    pub(crate) fn build(self, yubikey: &mut YubiKey) -> Result<(Stub, Recipient, Metadata), Error> {
         let slot = match self.slot {
             Some(slot) => {
                 if !self.force {
@@ -141,12 +141,12 @@ impl IdentityBuilder {
         )?;
 
         let (_, cert) = x509_parser::parse_x509_certificate(cert.as_ref()).unwrap();
-        let created = cert.validity().not_before.to_rfc2822();
+        let metadata = Metadata::extract(yubikey, slot, &cert, false).unwrap();
 
         Ok((
             Stub::new(yubikey.serial(), slot, &recipient),
             recipient,
-            created,
+            metadata,
         ))
     }
 }

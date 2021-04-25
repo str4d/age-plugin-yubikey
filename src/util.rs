@@ -1,8 +1,10 @@
+use std::fmt;
+
 use x509_parser::{certificate::X509Certificate, der_parser::oid::Oid};
 use yubikey_piv::{
-    key::RetiredSlotId,
+    key::{RetiredSlotId, SlotId},
     policy::{PinPolicy, TouchPolicy},
-    Key, YubiKey,
+    Serial, YubiKey,
 };
 
 use crate::{error::Error, p256::Recipient, yubikey::Stub, BINARY_NAME, USABLE_SLOTS};
@@ -89,68 +91,108 @@ pub(crate) fn extract_name(cert: &X509Certificate, all: bool) -> Option<(String,
     }
 }
 
-pub(crate) fn extract_name_and_policies(
-    yubikey: &mut YubiKey,
-    key: &Key,
-    cert: &X509Certificate,
-    all: bool,
-) -> Option<(String, Option<PinPolicy>, Option<TouchPolicy>)> {
-    // We store the PIN and touch policies for identities in their certificates
-    // using the same certificate extension as PIV attestations.
-    // https://developers.yubico.com/PIV/Introduction/PIV_attestation.html
-    let policies = |c: &X509Certificate| {
-        c.extensions()
-            .get(&Oid::from(POLICY_EXTENSION_OID).unwrap())
-            // If the encoded extension doesn't have 2 bytes, we assume it is invalid.
-            .filter(|policy| policy.value.len() >= 2)
-            .map(|policy| {
-                // We should only ever see one of three values for either policy, but
-                // handle unknown values just in case.
-                let pin_policy = match policy.value[0] {
-                    0x01 => Some(PinPolicy::Never),
-                    0x02 => Some(PinPolicy::Once),
-                    0x03 => Some(PinPolicy::Always),
-                    _ => None,
-                };
-                let touch_policy = match policy.value[1] {
-                    0x01 => Some(TouchPolicy::Never),
-                    0x02 => Some(TouchPolicy::Always),
-                    0x03 => Some(TouchPolicy::Cached),
-                    _ => None,
-                };
-                (pin_policy, touch_policy)
-            })
-            .unwrap_or((None, None))
-    };
-
-    extract_name(cert, all).map(|(name, ours)| {
-        if ours {
-            let (pin_policy, touch_policy) = policies(&cert);
-            (name, pin_policy, touch_policy)
-        } else {
-            // We can extract the PIN and touch policies via an attestation. This
-            // is slow, but the user has asked for all compatible keys, so...
-            let (pin_policy, touch_policy) = yubikey_piv::key::attest(yubikey, key.slot())
-                .ok()
-                .and_then(|buf| {
-                    x509_parser::parse_x509_certificate(&buf)
-                        .map(|(_, c)| policies(&c))
-                        .ok()
-                })
-                .unwrap_or((None, None));
-
-            (name, pin_policy, touch_policy)
-        }
-    })
+pub(crate) struct Metadata {
+    serial: Serial,
+    slot: RetiredSlotId,
+    name: String,
+    created: String,
+    pin_policy: Option<PinPolicy>,
+    touch_policy: Option<TouchPolicy>,
 }
 
-pub(crate) fn print_identity(stub: Stub, recipient: Recipient, created: &str) {
+impl Metadata {
+    pub(crate) fn extract(
+        yubikey: &mut YubiKey,
+        slot: RetiredSlotId,
+        cert: &X509Certificate,
+        all: bool,
+    ) -> Option<Self> {
+        // We store the PIN and touch policies for identities in their certificates
+        // using the same certificate extension as PIV attestations.
+        // https://developers.yubico.com/PIV/Introduction/PIV_attestation.html
+        let policies = |c: &X509Certificate| {
+            c.extensions()
+                .get(&Oid::from(POLICY_EXTENSION_OID).unwrap())
+                // If the encoded extension doesn't have 2 bytes, we assume it is invalid.
+                .filter(|policy| policy.value.len() >= 2)
+                .map(|policy| {
+                    // We should only ever see one of three values for either policy, but
+                    // handle unknown values just in case.
+                    let pin_policy = match policy.value[0] {
+                        0x01 => Some(PinPolicy::Never),
+                        0x02 => Some(PinPolicy::Once),
+                        0x03 => Some(PinPolicy::Always),
+                        _ => None,
+                    };
+                    let touch_policy = match policy.value[1] {
+                        0x01 => Some(TouchPolicy::Never),
+                        0x02 => Some(TouchPolicy::Always),
+                        0x03 => Some(TouchPolicy::Cached),
+                        _ => None,
+                    };
+                    (pin_policy, touch_policy)
+                })
+                .unwrap_or((None, None))
+        };
+
+        extract_name(cert, all)
+            .map(|(name, ours)| {
+                if ours {
+                    let (pin_policy, touch_policy) = policies(&cert);
+                    (name, pin_policy, touch_policy)
+                } else {
+                    // We can extract the PIN and touch policies via an attestation. This
+                    // is slow, but the user has asked for all compatible keys, so...
+                    let (pin_policy, touch_policy) =
+                        yubikey_piv::key::attest(yubikey, SlotId::Retired(slot))
+                            .ok()
+                            .and_then(|buf| {
+                                x509_parser::parse_x509_certificate(&buf)
+                                    .map(|(_, c)| policies(&c))
+                                    .ok()
+                            })
+                            .unwrap_or((None, None));
+
+                    (name, pin_policy, touch_policy)
+                }
+            })
+            .map(|(name, pin_policy, touch_policy)| Metadata {
+                serial: yubikey.serial(),
+                slot,
+                name,
+                created: cert.validity().not_before.to_rfc2822(),
+                pin_policy,
+                touch_policy,
+            })
+    }
+}
+
+impl fmt::Display for Metadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "#       Serial: {}, Slot: {}",
+            self.serial,
+            slot_to_ui(&self.slot)
+        )?;
+        writeln!(f, "#         Name: {}", self.name)?;
+        writeln!(f, "#      Created: {}", self.created)?;
+        writeln!(f, "#   PIN policy: {}", pin_policy_to_str(self.pin_policy))?;
+        write!(
+            f,
+            "# Touch policy: {}",
+            touch_policy_to_str(self.touch_policy)
+        )
+    }
+}
+
+pub(crate) fn print_identity(stub: Stub, recipient: Recipient, metadata: Metadata) {
     let recipient = recipient.to_string();
     if !console::user_attended() {
         eprintln!("Recipient: {}", recipient);
     }
 
-    println!("# created: {}", created);
-    println!("# recipient: {}", recipient);
+    println!("{}", metadata);
+    println!("#    Recipient: {}", recipient);
     println!("{}", stub.to_string());
 }
