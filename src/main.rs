@@ -1,4 +1,6 @@
 use std::convert::{TryFrom, TryInto};
+use std::fs::{File, OpenOptions};
+use std::io::{self, Write};
 
 use age_plugin::run_state_machine;
 use dialoguer::{Confirm, Input, Select};
@@ -485,7 +487,40 @@ fn main() -> Result<(), Error> {
             }
         };
 
-        util::print_identity(stub, recipient, metadata);
+        eprintln!();
+        let file_name = Input::<String>::new()
+            .with_prompt("📝 File name to write this identity to")
+            .default(format!(
+                "age-yubikey-identity-{}.txt",
+                hex::encode(stub.tag)
+            ))
+            .interact_text()?;
+
+        let mut file = match OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&file_name)
+        {
+            Ok(file) => file,
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                if Confirm::new()
+                    .with_prompt("File exists. Overwrite it?")
+                    .interact()?
+                {
+                    File::create(&file_name)?
+                } else {
+                    return Ok(());
+                }
+            }
+            Err(e) => return Err(e.into()),
+        };
+
+        writeln!(file, "{}", metadata)?;
+        writeln!(file, "#    Recipient: {}", recipient)?;
+        writeln!(file, "{}", stub.to_string())?;
+
+        eprintln!();
+        eprintln!("💭 Remember: everything breaks, have a backup plan for when this YubiKey does.");
 
         Ok(())
     }
