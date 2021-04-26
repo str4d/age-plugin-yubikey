@@ -371,7 +371,7 @@ fn main() -> Result<(), Error> {
             })
             .collect();
 
-        let (stub, recipient, metadata) = {
+        let ((stub, recipient, metadata), is_new) = {
             let (slot_index, slot) = loop {
                 match Select::new()
                     .with_prompt("🕳️  Select a slot for your age identity")
@@ -407,7 +407,7 @@ fn main() -> Result<(), Error> {
                     let metadata =
                         util::Metadata::extract(&mut yubikey, slot, &cert, true).unwrap();
 
-                    (stub, recipient, metadata)
+                    ((stub, recipient, metadata), false)
                 } else {
                     return Ok(());
                 }
@@ -472,15 +472,18 @@ fn main() -> Result<(), Error> {
                     .interact()?
                 {
                     eprintln!();
-                    builder::IdentityBuilder::new(Some(slot))
-                        .with_name(match name {
-                            s if s.is_empty() => flags.name,
-                            s => Some(s),
-                        })
-                        .with_pin_policy(Some(pin_policy))
-                        .with_touch_policy(Some(touch_policy))
-                        .force(flags.force)
-                        .build(&mut yubikey)?
+                    (
+                        builder::IdentityBuilder::new(Some(slot))
+                            .with_name(match name {
+                                s if s.is_empty() => flags.name,
+                                s => Some(s),
+                            })
+                            .with_pin_policy(Some(pin_policy))
+                            .with_touch_policy(Some(touch_policy))
+                            .force(flags.force)
+                            .build(&mut yubikey)?,
+                        true,
+                    )
                 } else {
                     return Ok(());
                 }
@@ -519,6 +522,31 @@ fn main() -> Result<(), Error> {
         writeln!(file, "#    Recipient: {}", recipient)?;
         writeln!(file, "{}", stub.to_string())?;
 
+        eprintln!();
+        eprintln!("✅ Done! This YubiKey identity is ready to go.");
+        eprintln!();
+        if is_new {
+            eprintln!("🔑 Here's your shiny new YubiKey recipient:");
+        } else {
+            eprintln!("🔑 Here's the corresponding YubiKey recipient:");
+        }
+        eprintln!("  {}", recipient);
+        eprintln!();
+        eprintln!("Here are some example things you can do with it:");
+        eprintln!();
+        eprintln!("- Encrypt a file to this identity:");
+        eprintln!("  $ cat foo.txt | age -r {} -o foo.txt.age", recipient);
+        eprintln!();
+        eprintln!("- Decrypt a file with this identity:");
+        eprintln!("  $ cat foo.txt.age | age -d -i {} > foo.txt", file_name);
+        eprintln!();
+        eprintln!("- Recreate the identity file:");
+        eprintln!(
+            "  $ age-plugin-yubikey -i --serial {} --slot {} > {}",
+            stub.serial,
+            util::slot_to_ui(&stub.slot),
+            file_name,
+        );
         eprintln!();
         eprintln!("💭 Remember: everything breaks, have a backup plan for when this YubiKey does.");
 
