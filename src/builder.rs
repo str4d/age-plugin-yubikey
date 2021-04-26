@@ -15,8 +15,8 @@ use crate::{
     BINARY_NAME, USABLE_SLOTS,
 };
 
-const DEFAULT_PIN_POLICY: PinPolicy = PinPolicy::Once;
-const DEFAULT_TOUCH_POLICY: TouchPolicy = TouchPolicy::Always;
+pub(crate) const DEFAULT_PIN_POLICY: PinPolicy = PinPolicy::Once;
+pub(crate) const DEFAULT_TOUCH_POLICY: TouchPolicy = TouchPolicy::Always;
 
 pub(crate) struct IdentityBuilder {
     slot: Option<RetiredSlotId>,

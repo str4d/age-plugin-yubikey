@@ -283,6 +283,8 @@ fn main() -> Result<(), Error> {
     } else if opts.list_all {
         list(true)
     } else {
+        let flags: PluginFlags = opts.try_into()?;
+
         eprintln!("✨ Let's get your YubiKey set up for age! ✨");
         eprintln!();
         eprintln!("This tool can create a new age identity in a free slot of your YubiKey.");
@@ -408,17 +410,13 @@ fn main() -> Result<(), Error> {
                     return Ok(());
                 }
             } else {
-                let name = match Input::<String>::new()
+                let name = Input::<String>::new()
                     .with_prompt(format!(
                         "📛 Name this identity [{}]",
-                        opts.name.as_deref().unwrap_or("age identity TAG_HEX")
+                        flags.name.as_deref().unwrap_or("age identity TAG_HEX")
                     ))
                     .allow_empty(true)
-                    .interact_text()?
-                {
-                    s if s.is_empty() => opts.name,
-                    s => Some(s),
-                };
+                    .interact_text()?;
 
                 let pin_policy = match Select::new()
                     .with_prompt("🔤 Select a PIN policy")
@@ -427,7 +425,14 @@ fn main() -> Result<(), Error> {
                         "Once   (A PIN is required once per session, if set)",
                         "Never  (A PIN is NOT required to decrypt)",
                     ])
-                    .default(1)
+                    .default(
+                        [PinPolicy::Always, PinPolicy::Once, PinPolicy::Never]
+                            .iter()
+                            .position(|p| {
+                                p == &flags.pin_policy.unwrap_or(builder::DEFAULT_PIN_POLICY)
+                            })
+                            .unwrap(),
+                    )
                     .interact_opt()?
                 {
                     Some(0) => PinPolicy::Always,
@@ -444,7 +449,13 @@ fn main() -> Result<(), Error> {
                             "Cached (A physical touch is required for decryption, and is cached for 15 seconds)",
                             "Never  (A physical touch is NOT required to decrypt)",
                         ])
-                        .default(0)
+                        .default(
+                            [TouchPolicy::Always, TouchPolicy::Cached, TouchPolicy::Never]
+                                .iter()
+                                .position(|p| p == &flags
+                                    .touch_policy.unwrap_or(builder::DEFAULT_TOUCH_POLICY))
+                                .unwrap(),
+                        )
                         .interact_opt()?
                     {
                         Some(0) => TouchPolicy::Always,
@@ -460,10 +471,13 @@ fn main() -> Result<(), Error> {
                 {
                     eprintln!();
                     builder::IdentityBuilder::new(Some(slot))
-                        .with_name(name)
+                        .with_name(match name {
+                            s if s.is_empty() => flags.name,
+                            s => Some(s),
+                        })
                         .with_pin_policy(Some(pin_policy))
                         .with_touch_policy(Some(touch_policy))
-                        .force(opts.force)
+                        .force(flags.force)
                         .build(&mut yubikey)?
                 } else {
                     return Ok(());
