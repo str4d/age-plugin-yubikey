@@ -1,5 +1,5 @@
 use age_plugin::run_state_machine;
-use dialoguer::{Confirm, Select};
+use dialoguer::{Confirm, Input, Select};
 use gumdrop::Options;
 use yubikey_piv::{
     certificate::PublicKeyInfo,
@@ -385,6 +385,18 @@ fn main() -> Result<(), Error> {
                     return Ok(());
                 }
             } else {
+                let name = match Input::<String>::new()
+                    .with_prompt(format!(
+                        "📛 Name this identity [{}]",
+                        opts.name.as_deref().unwrap_or("age identity TAG_HEX")
+                    ))
+                    .allow_empty(true)
+                    .interact_text()?
+                {
+                    s if s.is_empty() => opts.name,
+                    s => Some(s),
+                };
+
                 let pin_policy = match Select::new()
                     .with_prompt("🔤 Select a PIN policy")
                     .items(&[
@@ -425,7 +437,7 @@ fn main() -> Result<(), Error> {
                 {
                     eprintln!();
                     builder::IdentityBuilder::new(Some(slot))
-                        .with_name(opts.name)
+                        .with_name(name)
                         .with_pin_policy(Some(pin_policy))
                         .with_touch_policy(Some(touch_policy))
                         .force(opts.force)
