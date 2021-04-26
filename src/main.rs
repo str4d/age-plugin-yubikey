@@ -1,3 +1,5 @@
+use std::convert::{TryFrom, TryInto};
+
 use age_plugin::run_state_machine;
 use dialoguer::{Confirm, Input, Select};
 use gumdrop::Options;
@@ -5,7 +7,7 @@ use yubikey_piv::{
     certificate::PublicKeyInfo,
     key::{RetiredSlotId, SlotId},
     policy::{PinPolicy, TouchPolicy},
-    Key, Readers,
+    Key, Readers, Serial,
 };
 
 mod builder;
@@ -105,25 +107,49 @@ struct PluginOptions {
     touch_policy: Option<String>,
 }
 
-fn generate(opts: PluginOptions) -> Result<(), Error> {
-    let serial = opts.serial.map(|s| s.into());
-    let slot = opts.slot.map(util::ui_to_slot).transpose()?;
-    let pin_policy = opts
-        .pin_policy
-        .map(util::pin_policy_from_string)
-        .transpose()?;
-    let touch_policy = opts
-        .touch_policy
-        .map(util::touch_policy_from_string)
-        .transpose()?;
+struct PluginFlags {
+    serial: Option<Serial>,
+    slot: Option<RetiredSlotId>,
+    name: Option<String>,
+    pin_policy: Option<PinPolicy>,
+    touch_policy: Option<TouchPolicy>,
+    force: bool,
+}
 
-    let mut yubikey = yubikey::open(serial)?;
+impl TryFrom<PluginOptions> for PluginFlags {
+    type Error = Error;
 
-    let (stub, recipient, metadata) = builder::IdentityBuilder::new(slot)
-        .with_name(opts.name)
-        .with_pin_policy(pin_policy)
-        .with_touch_policy(touch_policy)
-        .force(opts.force)
+    fn try_from(opts: PluginOptions) -> Result<Self, Self::Error> {
+        let serial = opts.serial.map(|s| s.into());
+        let slot = opts.slot.map(util::ui_to_slot).transpose()?;
+        let pin_policy = opts
+            .pin_policy
+            .map(util::pin_policy_from_string)
+            .transpose()?;
+        let touch_policy = opts
+            .touch_policy
+            .map(util::touch_policy_from_string)
+            .transpose()?;
+
+        Ok(PluginFlags {
+            serial,
+            slot,
+            name: opts.name,
+            pin_policy,
+            touch_policy,
+            force: opts.force,
+        })
+    }
+}
+
+fn generate(flags: PluginFlags) -> Result<(), Error> {
+    let mut yubikey = yubikey::open(flags.serial)?;
+
+    let (stub, recipient, metadata) = builder::IdentityBuilder::new(flags.slot)
+        .with_name(flags.name)
+        .with_pin_policy(flags.pin_policy)
+        .with_touch_policy(flags.touch_policy)
+        .force(flags.force)
         .build(&mut yubikey)?;
 
     util::print_identity(stub, recipient, metadata);
@@ -131,11 +157,8 @@ fn generate(opts: PluginOptions) -> Result<(), Error> {
     Ok(())
 }
 
-fn identity(opts: PluginOptions) -> Result<(), Error> {
-    let serial = opts.serial.map(|s| s.into());
-    let slot = opts.slot.map(util::ui_to_slot).transpose()?;
-
-    let mut yubikey = yubikey::open(serial)?;
+fn identity(flags: PluginFlags) -> Result<(), Error> {
+    let mut yubikey = yubikey::open(flags.serial)?;
 
     let mut keys = Key::list(&mut yubikey)?.into_iter().filter_map(|key| {
         // - We only use the retired slots.
@@ -148,7 +171,7 @@ fn identity(opts: PluginOptions) -> Result<(), Error> {
         }
     });
 
-    let (key, slot, recipient) = if let Some(slot) = slot {
+    let (key, slot, recipient) = if let Some(slot) = flags.slot {
         keys.find(|(_, s, _)| s == &slot)
             .ok_or(Error::SlotHasNoIdentity(slot))
     } else {
@@ -252,9 +275,9 @@ fn main() -> Result<(), Error> {
         println!("age-plugin-yubikey {}", env!("CARGO_PKG_VERSION"));
         Ok(())
     } else if opts.generate {
-        generate(opts)
+        generate(opts.try_into()?)
     } else if opts.identity {
-        identity(opts)
+        identity(opts.try_into()?)
     } else if opts.list {
         list(false)
     } else if opts.list_all {
