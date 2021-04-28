@@ -12,10 +12,8 @@ pub enum Error {
     InvalidTouchPolicy(String),
     Io(io::Error),
     MultipleCommands,
-    MultipleIdentities,
     MultipleYubiKeys,
     NoEmptySlots(Serial),
-    NoIdentities,
     NoMatchingSerial(Serial),
     SlotHasNoIdentity(RetiredSlotId),
     SlotIsNotEmpty(RetiredSlotId),
@@ -64,19 +62,12 @@ impl fmt::Debug for Error {
                 f,
                 "Only one of --generate, --identity, --list, --list-all can be specified."
             )?,
-            Error::MultipleIdentities => writeln!(
-                f,
-                "This YubiKey has multiple age identities. Use --slot to select a single identity."
-            )?,
             Error::MultipleYubiKeys => writeln!(
                 f,
                 "Multiple YubiKeys are plugged in. Use --serial to select a single YubiKey."
             )?,
             Error::NoEmptySlots(serial) => {
                 writeln!(f, "YubiKey with serial {} has no empty slots.", serial)?
-            }
-            Error::NoIdentities => {
-                writeln!(f, "This YubiKey does not contain any age identities.")?
             }
             Error::NoMatchingSerial(serial) => {
                 writeln!(f, "Could not find YubiKey with serial {}.", serial)?

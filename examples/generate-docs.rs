@@ -49,18 +49,18 @@ fn main() {
             Flag::new()
                 .short("-i")
                 .long("--identity")
-                .help("Print the identity stored in a YubiKey slot."),
+                .help("Print identities stored in connected YubiKeys."),
         )
         .flag(
             Flag::new()
                 .short("-l")
                 .long("--list")
-                .help("List all age identities in connected YubiKeys."),
+                .help("List recipients for age identities in connected YubiKeys."),
         )
         .flag(
             Flag::new()
                 .long("--list-all")
-                .help("List all YubiKey keys that are compatible with age."),
+                .help("List recipients for all YubiKey keys that are compatible with age."),
         )
         .flag(
             Flag::new()

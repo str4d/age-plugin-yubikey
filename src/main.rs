@@ -72,13 +72,16 @@ struct PluginOptions {
     #[options(help = "Generate a new YubiKey identity.")]
     generate: bool,
 
-    #[options(help = "Print the identity stored in a YubiKey slot.")]
+    #[options(help = "Print identities stored in connected YubiKeys.")]
     identity: bool,
 
-    #[options(help = "List all age identities in connected YubiKeys.")]
+    #[options(help = "List recipients for age identities in connected YubiKeys.")]
     list: bool,
 
-    #[options(help = "List all YubiKey keys that are compatible with age.", no_short)]
+    #[options(
+        help = "List recipients for all YubiKey keys that are compatible with age.",
+        no_short
+    )]
     list_all: bool,
 
     #[options(
@@ -159,8 +162,12 @@ fn generate(flags: PluginFlags) -> Result<(), Error> {
     Ok(())
 }
 
-fn identity(flags: PluginFlags) -> Result<(), Error> {
-    let mut yubikey = yubikey::open(flags.serial)?;
+fn print_single(
+    serial: Option<Serial>,
+    slot: RetiredSlotId,
+    printer: impl Fn(yubikey::Stub, p256::Recipient, util::Metadata),
+) -> Result<(), Error> {
+    let mut yubikey = yubikey::open(serial)?;
 
     let mut keys = Key::list(&mut yubikey)?.into_iter().filter_map(|key| {
         // - We only use the retired slots.
@@ -173,29 +180,9 @@ fn identity(flags: PluginFlags) -> Result<(), Error> {
         }
     });
 
-    let (key, slot, recipient) = if let Some(slot) = flags.slot {
-        keys.find(|(_, s, _)| s == &slot)
-            .ok_or(Error::SlotHasNoIdentity(slot))
-    } else {
-        let mut keys = keys.filter(|(key, _, _)| {
-            let cert = x509_parser::parse_x509_certificate(key.certificate().as_ref())
-                .map(|(_, cert)| cert)
-                .ok();
-            match cert
-                .as_ref()
-                .and_then(|cert| cert.subject().iter_organization().next())
-            {
-                Some(org) => org.as_str() == Ok(BINARY_NAME),
-                _ => false,
-            }
-        });
-        match (keys.next(), keys.next()) {
-            (None, None) => Err(Error::NoIdentities),
-            (Some(key), None) => Ok(key),
-            (Some(_), Some(_)) => Err(Error::MultipleIdentities),
-            (None, Some(_)) => unreachable!(),
-        }
-    }?;
+    let (key, slot, recipient) = keys
+        .find(|(_, s, _)| s == &slot)
+        .ok_or(Error::SlotHasNoIdentity(slot))?;
 
     let stub = yubikey::Stub::new(yubikey.serial(), slot, &recipient);
     let metadata = x509_parser::parse_x509_certificate(key.certificate().as_ref())
@@ -203,16 +190,27 @@ fn identity(flags: PluginFlags) -> Result<(), Error> {
         .and_then(|(_, cert)| util::Metadata::extract(&mut yubikey, slot, &cert, true))
         .unwrap();
 
-    util::print_identity(stub, recipient, metadata);
+    printer(stub, recipient, metadata);
 
     Ok(())
 }
 
-fn list(all: bool) -> Result<(), Error> {
+fn print_multiple(
+    kind: &str,
+    serial: Option<Serial>,
+    all: bool,
+    printer: impl Fn(yubikey::Stub, p256::Recipient, util::Metadata),
+) -> Result<(), Error> {
     let mut readers = Readers::open()?;
 
+    let mut printed = 0;
     for reader in readers.iter()?.filter(yubikey::filter_connected) {
         let mut yubikey = reader.open()?;
+        if let Some(serial) = serial {
+            if yubikey.serial() != serial {
+                continue;
+            }
+        }
 
         for key in Key::list(&mut yubikey)? {
             // We only use the retired slots.
@@ -230,6 +228,7 @@ fn list(all: bool) -> Result<(), Error> {
                 _ => continue,
             };
 
+            let stub = yubikey::Stub::new(yubikey.serial(), slot, &recipient);
             let metadata = match x509_parser::parse_x509_certificate(key.certificate().as_ref())
                 .ok()
                 .and_then(|(_, cert)| util::Metadata::extract(&mut yubikey, slot, &cert, all))
@@ -238,14 +237,44 @@ fn list(all: bool) -> Result<(), Error> {
                 None => continue,
             };
 
-            println!("{}", metadata);
-            println!("{}", recipient.to_string());
+            printer(stub, recipient, metadata);
+            printed += 1;
             println!();
         }
         println!();
     }
+    if printed > 1 {
+        eprintln!(
+            "Generated {} for {} slots. If you intended to select a slot, use --slot.",
+            kind, printed,
+        );
+    }
 
     Ok(())
+}
+
+fn print_details(
+    kind: &str,
+    flags: PluginFlags,
+    all: bool,
+    printer: impl Fn(yubikey::Stub, p256::Recipient, util::Metadata),
+) -> Result<(), Error> {
+    if let Some(slot) = flags.slot {
+        print_single(flags.serial, slot, printer)
+    } else {
+        print_multiple(kind, flags.serial, all, printer)
+    }
+}
+
+fn identity(flags: PluginFlags) -> Result<(), Error> {
+    print_details("identities", flags, false, util::print_identity)
+}
+
+fn list(flags: PluginFlags, all: bool) -> Result<(), Error> {
+    print_details("recipients", flags, all, |_, recipient, metadata| {
+        println!("{}", metadata);
+        println!("{}", recipient.to_string());
+    })
 }
 
 fn main() -> Result<(), Error> {
@@ -281,9 +310,9 @@ fn main() -> Result<(), Error> {
     } else if opts.identity {
         identity(opts.try_into()?)
     } else if opts.list {
-        list(false)
+        list(opts.try_into()?, false)
     } else if opts.list_all {
-        list(true)
+        list(opts.try_into()?, true)
     } else {
         let flags: PluginFlags = opts.try_into()?;
 
@@ -546,6 +575,13 @@ fn main() -> Result<(), Error> {
             stub.serial,
             util::slot_to_ui(&stub.slot),
             file_name,
+        );
+        eprintln!();
+        eprintln!("- Recreate the recipient:");
+        eprintln!(
+            "  $ age-plugin-yubikey -l --serial {} --slot {}",
+            stub.serial,
+            util::slot_to_ui(&stub.slot),
         );
         eprintln!();
         eprintln!("💭 Remember: everything breaks, have a backup plan for when this YubiKey does.");
