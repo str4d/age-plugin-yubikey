@@ -21,6 +21,21 @@ cargo install age-plugin-yubikey
 
 Help from new packagers is very welcome.
 
+### Windows Subsystem for Linux (WSL)
+
+WSL does not currently provide native support for USB devices. However, Windows
+binaries installed on the host can be run from inside a WSL environment. This
+means that you can encrypt or decrypt files inside a WSL environment with a
+YubiKey:
+
+1. Install `age-plugin-yubikey` on the Windows host.
+2. Install an age client inside the WSL environment.
+3. Ensure that `age-plugin-yubikey.exe` is available in the WSL environment's
+   `PATH`. For default WSL setups, the Windows host's `PATH` is automatically
+   added to the WSL environment's `PATH` (see
+   [this Microsoft blog post](https://devblogs.microsoft.com/commandline/share-environment-vars-between-wsl-and-windows/)
+   for more details).
+
 ## Configuration
 
 There are two ways to configure a YubiKey as an `age` identity. You can run the
