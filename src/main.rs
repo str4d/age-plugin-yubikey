@@ -325,9 +325,7 @@ fn main() -> Result<(), Error> {
         eprintln!("    age-plugin-yubikey --generate");
         eprintln!();
         eprintln!("If you are already using a YubiKey with age, you can select an existing");
-        eprintln!("slot to recreate its corresponding identity file and recipient. You can");
-        eprintln!("also obtain this directly with:");
-        eprintln!("    age-plugin-yubikey --identity");
+        eprintln!("slot to recreate its corresponding identity file and recipient.");
         eprintln!();
         eprintln!("When asked below to select an option, use the up/down arrow keys to");
         eprintln!("make your choice, or press [Esc] or [q] to quit.");
