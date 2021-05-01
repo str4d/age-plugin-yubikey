@@ -18,6 +18,7 @@ pub enum Error {
     SlotHasNoIdentity(RetiredSlotId),
     SlotIsNotEmpty(RetiredSlotId),
     TimedOut,
+    UseListForSingleSlot,
     YubiKey(yubikey_piv::Error),
 }
 
@@ -84,6 +85,9 @@ impl fmt::Debug for Error {
             )?,
             Error::TimedOut => {
                 writeln!(f, "Timed out while waiting for a YubiKey to be inserted.")?
+            }
+            Error::UseListForSingleSlot => {
+                writeln!(f, "Use --list to print the recipient for a single slot.")?
             }
             Error::YubiKey(e) => match e {
                 yubikey_piv::error::Error::NotFound => {

@@ -271,6 +271,10 @@ fn identity(flags: PluginFlags) -> Result<(), Error> {
 }
 
 fn list(flags: PluginFlags, all: bool) -> Result<(), Error> {
+    if all && flags.slot.is_some() {
+        return Err(Error::UseListForSingleSlot);
+    }
+
     print_details("recipients", flags, all, |_, recipient, metadata| {
         println!("{}", metadata);
         println!("{}", recipient.to_string());
