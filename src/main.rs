@@ -551,6 +551,9 @@ fn main() -> Result<(), Error> {
         writeln!(file, "#    Recipient: {}", recipient)?;
         writeln!(file, "{}", stub.to_string())?;
 
+        // If `rage` binary is installed, use it in examples. Otherwise default to `age`.
+        let age_binary = which::which("rage").map(|_| "rage").unwrap_or("age");
+
         eprintln!();
         eprintln!("✅ Done! This YubiKey identity is ready to go.");
         eprintln!();
@@ -564,10 +567,16 @@ fn main() -> Result<(), Error> {
         eprintln!("Here are some example things you can do with it:");
         eprintln!();
         eprintln!("- Encrypt a file to this identity:");
-        eprintln!("  $ cat foo.txt | age -r {} -o foo.txt.age", recipient);
+        eprintln!(
+            "  $ cat foo.txt | {} -r {} -o foo.txt.age",
+            age_binary, recipient
+        );
         eprintln!();
         eprintln!("- Decrypt a file with this identity:");
-        eprintln!("  $ cat foo.txt.age | age -d -i {} > foo.txt", file_name);
+        eprintln!(
+            "  $ cat foo.txt.age | {} -d -i {} > foo.txt",
+            age_binary, file_name
+        );
         eprintln!();
         eprintln!("- Recreate the identity file:");
         eprintln!(

@@ -37,6 +37,7 @@ pcsc = "2.4"
 rand = "0.7"
 secrecy = "0.7"
 sha2 = "0.9"
+which = "4.1"
 x509 = "0.2"
 x509-parser = "0.9"
 yubikey-piv = { version = "0.3", features = ["untested"] }
