@@ -550,6 +550,7 @@ fn main() -> Result<(), Error> {
         writeln!(file, "{}", metadata)?;
         writeln!(file, "#    Recipient: {}", recipient)?;
         writeln!(file, "{}", stub.to_string())?;
+        file.sync_data()?;
 
         // If `rage` binary is installed, use it in examples. Otherwise default to `age`.
         let age_binary = which::which("rage").map(|_| "rage").unwrap_or("age");
