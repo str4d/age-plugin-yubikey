@@ -6,20 +6,21 @@ use crate::util::slot_to_ui;
 
 pub enum Error {
     CustomManagementKey,
+    InvalidFlagCommand(String, String),
+    InvalidFlagTui(String),
     InvalidPinLength,
     InvalidPinPolicy(String),
     InvalidSlot(u8),
     InvalidTouchPolicy(String),
     Io(io::Error),
     MultipleCommands,
-    MultipleIdentities,
     MultipleYubiKeys,
     NoEmptySlots(Serial),
-    NoIdentities,
     NoMatchingSerial(Serial),
     SlotHasNoIdentity(RetiredSlotId),
     SlotIsNotEmpty(RetiredSlotId),
     TimedOut,
+    UseListForSingleSlot,
     YubiKey(yubikey_piv::Error),
 }
 
@@ -43,6 +44,14 @@ impl fmt::Debug for Error {
             Error::CustomManagementKey => {
                 writeln!(f, "Custom unprotected management keys are not supported.")?
             }
+            Error::InvalidFlagCommand(flag, command) => {
+                writeln!(f, "Flag '{}' cannot be used with '{}'.", flag, command)?
+            }
+            Error::InvalidFlagTui(flag) => writeln!(
+                f,
+                "Flag '{}' cannot be used with the interactive interface.",
+                flag
+            )?,
             Error::InvalidPinLength => writeln!(f, "The PIN needs to be 1-8 characters.")?,
             Error::InvalidPinPolicy(s) => writeln!(
                 f,
@@ -64,19 +73,12 @@ impl fmt::Debug for Error {
                 f,
                 "Only one of --generate, --identity, --list, --list-all can be specified."
             )?,
-            Error::MultipleIdentities => writeln!(
-                f,
-                "This YubiKey has multiple age identities. Use --slot to select a single identity."
-            )?,
             Error::MultipleYubiKeys => writeln!(
                 f,
                 "Multiple YubiKeys are plugged in. Use --serial to select a single YubiKey."
             )?,
             Error::NoEmptySlots(serial) => {
                 writeln!(f, "YubiKey with serial {} has no empty slots.", serial)?
-            }
-            Error::NoIdentities => {
-                writeln!(f, "This YubiKey does not contain any age identities.")?
             }
             Error::NoMatchingSerial(serial) => {
                 writeln!(f, "Could not find YubiKey with serial {}.", serial)?
@@ -93,6 +95,9 @@ impl fmt::Debug for Error {
             )?,
             Error::TimedOut => {
                 writeln!(f, "Timed out while waiting for a YubiKey to be inserted.")?
+            }
+            Error::UseListForSingleSlot => {
+                writeln!(f, "Use --list to print the recipient for a single slot.")?
             }
             Error::YubiKey(e) => match e {
                 yubikey_piv::error::Error::NotFound => {

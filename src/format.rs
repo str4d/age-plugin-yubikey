@@ -9,7 +9,7 @@ use std::convert::TryInto;
 
 use crate::{p256::Recipient, STANZA_TAG};
 
-pub(crate) const STANZA_KEY_LABEL: &[u8] = b"age-encryption.org/v1/piv-p256";
+pub(crate) const STANZA_KEY_LABEL: &[u8] = b"piv-p256";
 
 const TAG_BYTES: usize = 4;
 const EPK_BYTES: usize = 33;
