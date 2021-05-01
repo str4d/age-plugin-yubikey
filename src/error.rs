@@ -6,6 +6,8 @@ use crate::util::slot_to_ui;
 
 pub enum Error {
     CustomManagementKey,
+    InvalidFlagCommand(String, String),
+    InvalidFlagTui(String),
     InvalidPinLength,
     InvalidPinPolicy(String),
     InvalidSlot(u8),
@@ -42,6 +44,14 @@ impl fmt::Debug for Error {
             Error::CustomManagementKey => {
                 writeln!(f, "Custom unprotected management keys are not supported.")?
             }
+            Error::InvalidFlagCommand(flag, command) => {
+                writeln!(f, "Flag '{}' cannot be used with '{}'.", flag, command)?
+            }
+            Error::InvalidFlagTui(flag) => writeln!(
+                f,
+                "Flag '{}' cannot be used with the interactive interface.",
+                flag
+            )?,
             Error::InvalidPinLength => writeln!(f, "The PIN needs to be 1-8 characters.")?,
             Error::InvalidPinPolicy(s) => writeln!(
                 f,

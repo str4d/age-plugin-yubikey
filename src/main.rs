@@ -267,12 +267,24 @@ fn print_details(
 }
 
 fn identity(flags: PluginFlags) -> Result<(), Error> {
+    if flags.force {
+        return Err(Error::InvalidFlagCommand(
+            "--force".into(),
+            "--identity".into(),
+        ));
+    }
     print_details("identities", flags, false, util::print_identity)
 }
 
 fn list(flags: PluginFlags, all: bool) -> Result<(), Error> {
     if all && flags.slot.is_some() {
         return Err(Error::UseListForSingleSlot);
+    }
+    if flags.force {
+        return Err(Error::InvalidFlagCommand(
+            "--force".into(),
+            format!("--list{}", if all { "-all" } else { "" }),
+        ));
     }
 
     print_details("recipients", flags, all, |_, recipient, metadata| {
@@ -318,6 +330,9 @@ fn main() -> Result<(), Error> {
     } else if opts.list_all {
         list(opts.try_into()?, true)
     } else {
+        if opts.force {
+            return Err(Error::InvalidFlagTui("--force".into()));
+        }
         let flags: PluginFlags = opts.try_into()?;
 
         eprintln!("✨ Let's get your YubiKey set up for age! ✨");
@@ -511,7 +526,6 @@ fn main() -> Result<(), Error> {
                             })
                             .with_pin_policy(Some(pin_policy))
                             .with_touch_policy(Some(touch_policy))
-                            .force(flags.force)
                             .build(&mut yubikey)?,
                         true,
                     )
