@@ -22,8 +22,8 @@ assets = [
 ]
 
 [dependencies]
-age-core = "0.5"
-age-plugin = "0.0"
+age-core = "0.6"
+age-plugin = "0.1"
 base64 = "0.13"
 bech32 = "0.8"
 console = "0.14"
@@ -45,7 +45,3 @@ yubikey-piv = { version = "0.3", features = ["untested"] }
 [dev-dependencies]
 flate2 = "1"
 man = "0.3"
-
-[patch.crates-io]
-age-core = { git = "https://github.com/str4d/rage.git", rev = "4aa52a2dbb5feed86dcafa3afe8d554975ca5518" }
-age-plugin = { git = "https://github.com/str4d/rage.git", rev = "4aa52a2dbb5feed86dcafa3afe8d554975ca5518" }
