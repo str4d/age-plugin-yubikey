@@ -17,8 +17,9 @@ dependencies = [
 
 [[package]]
 name = "age-core"
-version = "0.5.0"
-source = "git+https://github.com/str4d/rage.git?rev=4aa52a2dbb5feed86dcafa3afe8d554975ca5518#4aa52a2dbb5feed86dcafa3afe8d554975ca5518"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad65fc4325804de2e915f5a50dda38218ed49f97e1270750acef9ff8bb67ac36"
 dependencies = [
  "base64",
  "c2-chacha",
@@ -34,8 +35,9 @@ dependencies = [
 
 [[package]]
 name = "age-plugin"
-version = "0.0.0"
-source = "git+https://github.com/str4d/rage.git?rev=4aa52a2dbb5feed86dcafa3afe8d554975ca5518#4aa52a2dbb5feed86dcafa3afe8d554975ca5518"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab66824efab6086bdd70e8be63323579bde82da2f336036b3db504ceb2b9dbac"
 dependencies = [
  "age-core",
  "bech32",
@@ -45,7 +47,7 @@ dependencies = [
 
 [[package]]
 name = "age-plugin-yubikey"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "age-core",
  "age-plugin",
@@ -273,6 +275,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto-mac"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25fab6889090c8133f3deb8f73ba3c65a7f456f66436fc012a1b1e272b1e103e"
+dependencies = [
+ "generic-array",
+ "subtle",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -342,16 +354,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3dd60d1080a57a05ab032377049e0591415d2b31afd7028356dbf3cc6dcb066"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "ecdsa"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41fbdb4ff710acb4db8ca29f93b897529ea6d6a45626d5183b47e012aa6ae7e4"
-dependencies = [
- "elliptic-curve",
- "signature",
 ]
 
 [[package]]
@@ -505,12 +507,12 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hkdf"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51ab2f639c231793c5f6114bdb9bbe50a7dbbfcd7c7c6bd8475dec2d991e964f"
+checksum = "01706d578d5c281058480e673ae4086a9f4710d8df1ad80a5b03e39ece5f886b"
 dependencies = [
  "digest",
- "hmac",
+ "hmac 0.11.0",
 ]
 
 [[package]]
@@ -519,7 +521,17 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1441c6b1e930e2817404b5046f1f989899143a12bf92de603b69f4e0aee1e15"
 dependencies = [
- "crypto-mac",
+ "crypto-mac 0.10.0",
+ "digest",
+]
+
+[[package]]
+name = "hmac"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a2a2320eb7ec0ebe8da8f744d7812d9fc4cb4d09344ac01898dbcb6a20ae69b"
+dependencies = [
+ "crypto-mac 0.11.0",
  "digest",
 ]
 
@@ -704,11 +716,10 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "p256"
-version = "0.7.2"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ca0196a204bb3f33305ba4a48b38f6e6e621cba8603a4e0650e6532e0949de4"
+checksum = "39f37a291d378ba3291c1fa4e925edb6729c8593d4c6064be79e4a4c12fa2d97"
 dependencies = [
- "ecdsa",
  "elliptic-curve",
 ]
 
@@ -727,7 +738,7 @@ version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf916dd32dd26297907890d99dc2740e33f6bd9073965af4ccff2967962f5508"
 dependencies = [
- "crypto-mac",
+ "crypto-mac 0.10.0",
 ]
 
 [[package]]
@@ -1028,15 +1039,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "signature"
-version = "1.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29f060a7d147e33490ec10da418795238fd7545bba241504d6b31a409f2e6210"
-dependencies = [
- "rand_core 0.5.1",
-]
-
-[[package]]
 name = "simple_asn1"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1306,7 +1308,7 @@ dependencies = [
  "des",
  "elliptic-curve",
  "getrandom 0.1.16",
- "hmac",
+ "hmac 0.10.1",
  "log",
  "nom",
  "num-bigint-dig",
