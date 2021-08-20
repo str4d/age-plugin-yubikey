@@ -213,6 +213,11 @@ impl IdentityPluginV1 for IdentityPlugin {
                 }
             };
 
+            if let Err(e) = conn.request_pin(&mut callbacks)? {
+                callbacks.error(e)?.unwrap();
+                continue;
+            }
+
             for (&file_index, stanzas) in files {
                 if file_keys.contains_key(&file_index) {
                     // We decrypted this file with an earlier YubiKey.

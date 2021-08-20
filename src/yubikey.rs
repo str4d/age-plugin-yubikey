@@ -316,30 +316,12 @@ impl Stub {
             }
         };
 
-        let pin = match callbacks.request_secret(&format!(
-            "Enter PIN for YubiKey with serial {}",
-            self.serial
-        ))? {
-            Ok(pin) => pin,
-            Err(_) => {
-                return Ok(Err(identity::Error::Identity {
-                    index: self.identity_index,
-                    message: format!("A PIN is required for YubiKey with serial {}", self.serial),
-                }))
-            }
-        };
-        if let Err(e) = yubikey.verify_pin(pin.expose_secret().as_bytes()) {
-            return Ok(Err(identity::Error::Identity {
-                index: self.identity_index,
-                message: format!("{:?}", Error::YubiKey(e)),
-            }));
-        }
-
         Ok(Ok(Connection {
             yubikey,
             pk,
             slot: self.slot,
             tag: self.tag,
+            identity_index: self.identity_index,
         }))
     }
 }
@@ -349,11 +331,40 @@ pub(crate) struct Connection {
     pk: Recipient,
     slot: RetiredSlotId,
     tag: [u8; 4],
+    identity_index: usize,
 }
 
 impl Connection {
     pub(crate) fn recipient(&self) -> &Recipient {
         &self.pk
+    }
+
+    pub(crate) fn request_pin<E>(
+        &mut self,
+        callbacks: &mut dyn Callbacks<E>,
+    ) -> io::Result<Result<(), identity::Error>> {
+        let pin = match callbacks.request_secret(&format!(
+            "Enter PIN for YubiKey with serial {}",
+            self.yubikey.serial()
+        ))? {
+            Ok(pin) => pin,
+            Err(_) => {
+                return Ok(Err(identity::Error::Identity {
+                    index: self.identity_index,
+                    message: format!(
+                        "A PIN is required for YubiKey with serial {}",
+                        self.yubikey.serial()
+                    ),
+                }))
+            }
+        };
+        if let Err(e) = self.yubikey.verify_pin(pin.expose_secret().as_bytes()) {
+            return Ok(Err(identity::Error::Identity {
+                index: self.identity_index,
+                message: format!("{:?}", Error::YubiKey(e)),
+            }));
+        }
+        Ok(Ok(()))
     }
 
     pub(crate) fn unwrap_file_key(&mut self, line: &RecipientLine) -> Result<FileKey, ()> {
