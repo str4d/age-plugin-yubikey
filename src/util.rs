@@ -96,7 +96,7 @@ pub(crate) struct Metadata {
     slot: RetiredSlotId,
     name: String,
     created: String,
-    pin_policy: Option<PinPolicy>,
+    pub(crate) pin_policy: Option<PinPolicy>,
     touch_policy: Option<TouchPolicy>,
 }
 

@@ -213,7 +213,7 @@ impl IdentityPluginV1 for IdentityPlugin {
                 }
             };
 
-            if let Err(e) = conn.request_pin(&mut callbacks)? {
+            if let Err(e) = conn.request_pin_if_necessary(&mut callbacks)? {
                 callbacks.error(e)?.unwrap();
                 continue;
             }
