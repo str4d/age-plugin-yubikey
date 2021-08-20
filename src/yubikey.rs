@@ -328,10 +328,10 @@ impl Stub {
                 }))
             }
         };
-        if yubikey.verify_pin(pin.expose_secret().as_bytes()).is_err() {
+        if let Err(e) = yubikey.verify_pin(pin.expose_secret().as_bytes()) {
             return Ok(Err(identity::Error::Identity {
                 index: self.identity_index,
-                message: "Invalid YubiKey PIN".to_owned(),
+                message: format!("{:?}", Error::YubiKey(e)),
             }));
         }
 
