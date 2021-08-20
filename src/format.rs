@@ -106,7 +106,7 @@ impl RecipientLine {
         let epk = esk.public_key();
         let epk_bytes = EphemeralKeyBytes::from_public_key(&epk);
 
-        let shared_secret = esk.diffie_hellman(&pk.public_key());
+        let shared_secret = esk.diffie_hellman(pk.public_key());
 
         let mut salt = vec![];
         salt.extend_from_slice(epk_bytes.as_bytes());

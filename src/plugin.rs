@@ -23,7 +23,7 @@ impl RecipientPluginV1 for RecipientPlugin {
         bytes: &[u8],
     ) -> Result<(), recipient::Error> {
         if let Some(pk) = if plugin_name == PLUGIN_NAME {
-            Recipient::from_bytes(&bytes)
+            Recipient::from_bytes(bytes)
         } else {
             None
         } {
@@ -44,7 +44,7 @@ impl RecipientPluginV1 for RecipientPlugin {
         bytes: &[u8],
     ) -> Result<(), recipient::Error> {
         if let Some(stub) = if plugin_name == PLUGIN_NAME {
-            yubikey::Stub::from_bytes(&bytes, index)
+            yubikey::Stub::from_bytes(bytes, index)
         } else {
             None
         } {
@@ -88,7 +88,7 @@ impl RecipientPluginV1 for RecipientPlugin {
                     self.recipients
                         .iter()
                         .chain(yk_recipients.iter())
-                        .map(|pk| format::RecipientLine::wrap_file_key(&file_key, &pk).into())
+                        .map(|pk| format::RecipientLine::wrap_file_key(&file_key, pk).into())
                         .collect()
                 })
                 .collect())
@@ -111,7 +111,7 @@ impl IdentityPluginV1 for IdentityPlugin {
         bytes: &[u8],
     ) -> Result<(), identity::Error> {
         if let Some(stub) = if plugin_name == PLUGIN_NAME {
-            yubikey::Stub::from_bytes(&bytes, index)
+            yubikey::Stub::from_bytes(bytes, index)
         } else {
             None
         } {
@@ -145,7 +145,7 @@ impl IdentityPluginV1 for IdentityPlugin {
         for (file, stanzas) in files.iter().enumerate() {
             for (stanza_index, stanza) in stanzas.iter().enumerate() {
                 match (
-                    format::RecipientLine::from_stanza(&stanza).map(|res| {
+                    format::RecipientLine::from_stanza(stanza).map(|res| {
                         res.map_err(|_| identity::Error::Stanza {
                             file_index: file,
                             stanza_index,
@@ -213,6 +213,11 @@ impl IdentityPluginV1 for IdentityPlugin {
                 }
             };
 
+            if let Err(e) = conn.request_pin_if_necessary(&mut callbacks)? {
+                callbacks.error(e)?.unwrap();
+                continue;
+            }
+
             for (&file_index, stanzas) in files {
                 if file_keys.contains_key(&file_index) {
                     // We decrypted this file with an earlier YubiKey.
@@ -220,7 +225,7 @@ impl IdentityPluginV1 for IdentityPlugin {
                 }
 
                 for (stanza_index, line) in stanzas.iter().enumerate() {
-                    match conn.unwrap_file_key(&line) {
+                    match conn.unwrap_file_key(line) {
                         Ok(file_key) => {
                             // We've managed to decrypt this file!
                             file_keys.entry(file_index).or_insert(Ok(file_key));

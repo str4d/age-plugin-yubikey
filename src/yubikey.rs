@@ -18,6 +18,7 @@ use std::time::{Duration, SystemTime};
 use yubikey_piv::{
     certificate::{Certificate, PublicKeyInfo},
     key::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
+    policy::PinPolicy,
     readers::Reader,
     yubikey::Serial,
     MgmKey, Readers, YubiKey,
@@ -27,6 +28,7 @@ use crate::{
     error::Error,
     format::{RecipientLine, STANZA_KEY_LABEL},
     p256::{Recipient, TAG_BYTES},
+    util::Metadata,
     IDENTITY_PREFIX,
 };
 
@@ -299,12 +301,12 @@ impl Stub {
         };
 
         // Read the pubkey from the YubiKey slot and check it still matches.
-        let pk = match Certificate::read(&mut yubikey, SlotId::Retired(self.slot))
+        let (cert, pk) = match Certificate::read(&mut yubikey, SlotId::Retired(self.slot))
             .ok()
             .and_then(|cert| match cert.subject_pki() {
-                PublicKeyInfo::EcP256(pubkey) => {
-                    Recipient::from_encoded(pubkey).filter(|pk| pk.tag() == self.tag)
-                }
+                PublicKeyInfo::EcP256(pubkey) => Recipient::from_encoded(pubkey)
+                    .filter(|pk| pk.tag() == self.tag)
+                    .map(|pk| (cert, pk)),
                 _ => None,
             }) {
             Some(pk) => pk,
@@ -316,44 +318,77 @@ impl Stub {
             }
         };
 
-        let pin = match callbacks.request_secret(&format!(
-            "Enter PIN for YubiKey with serial {}",
-            self.serial
-        ))? {
-            Ok(pin) => pin,
-            Err(_) => {
-                return Ok(Err(identity::Error::Identity {
-                    index: self.identity_index,
-                    message: format!("A PIN is required for YubiKey with serial {}", self.serial),
-                }))
-            }
-        };
-        if yubikey.verify_pin(pin.expose_secret().as_bytes()).is_err() {
-            return Ok(Err(identity::Error::Identity {
-                index: self.identity_index,
-                message: "Invalid YubiKey PIN".to_owned(),
-            }));
-        }
-
         Ok(Ok(Connection {
             yubikey,
+            cert,
             pk,
             slot: self.slot,
             tag: self.tag,
+            identity_index: self.identity_index,
         }))
     }
 }
 
 pub(crate) struct Connection {
     yubikey: YubiKey,
+    cert: Certificate,
     pk: Recipient,
     slot: RetiredSlotId,
     tag: [u8; 4],
+    identity_index: usize,
 }
 
 impl Connection {
     pub(crate) fn recipient(&self) -> &Recipient {
         &self.pk
+    }
+
+    pub(crate) fn request_pin_if_necessary<E>(
+        &mut self,
+        callbacks: &mut dyn Callbacks<E>,
+    ) -> io::Result<Result<(), identity::Error>> {
+        // Check if we can skip requesting a PIN.
+        let (_, cert) = x509_parser::parse_x509_certificate(self.cert.as_ref()).unwrap();
+        match Metadata::extract(&mut self.yubikey, self.slot, &cert, true) {
+            Some(metadata) => {
+                if let Some(PinPolicy::Never) = metadata.pin_policy {
+                    return Ok(Ok(()));
+                }
+            }
+            None => {
+                return Ok(Err(identity::Error::Identity {
+                    index: self.identity_index,
+                    message: "Certificate for YubiKey identity contains an invalid PIN policy"
+                        .to_string(),
+                }))
+            }
+        }
+
+        // The policy requires a PIN, so request it.
+        // Note that we can't distinguish between PinPolicy::Once and PinPolicy::Always
+        // because this plugin is ephemeral, so we always request the PIN.
+        let pin = match callbacks.request_secret(&format!(
+            "Enter PIN for YubiKey with serial {}",
+            self.yubikey.serial()
+        ))? {
+            Ok(pin) => pin,
+            Err(_) => {
+                return Ok(Err(identity::Error::Identity {
+                    index: self.identity_index,
+                    message: format!(
+                        "A PIN is required for YubiKey with serial {}",
+                        self.yubikey.serial()
+                    ),
+                }))
+            }
+        };
+        if let Err(e) = self.yubikey.verify_pin(pin.expose_secret().as_bytes()) {
+            return Ok(Err(identity::Error::Identity {
+                index: self.identity_index,
+                message: format!("{:?}", Error::YubiKey(e)),
+            }));
+        }
+        Ok(Ok(()))
     }
 
     pub(crate) fn unwrap_file_key(&mut self, line: &RecipientLine) -> Result<FileKey, ()> {
