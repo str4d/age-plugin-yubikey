@@ -358,9 +358,8 @@ impl Connection {
             None => {
                 return Ok(Err(identity::Error::Identity {
                     index: self.identity_index,
-                    message: format!(
-                        "Certificate for YubiKey identity contains an invalid PIN policy"
-                    ),
+                    message: "Certificate for YubiKey identity contains an invalid PIN policy"
+                        .to_string(),
                 }))
             }
         }

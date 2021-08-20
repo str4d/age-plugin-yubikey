@@ -138,7 +138,7 @@ impl Metadata {
         extract_name(cert, all)
             .map(|(name, ours)| {
                 if ours {
-                    let (pin_policy, touch_policy) = policies(&cert);
+                    let (pin_policy, touch_policy) = policies(cert);
                     (name, pin_policy, touch_policy)
                 } else {
                     // We can extract the PIN and touch policies via an attestation. This

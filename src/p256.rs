@@ -48,7 +48,7 @@ impl Recipient {
     /// This accepts both compressed (as used by the plugin) and uncompressed (as used in
     /// the YubiKey certificate) encodings.
     pub(crate) fn from_encoded(encoded: &p256::EncodedPoint) -> Option<Self> {
-        p256::PublicKey::from_encoded_point(&encoded).map(Recipient)
+        p256::PublicKey::from_encoded_point(encoded).map(Recipient)
     }
 
     /// Returns the compressed SEC-1 encoding of this recipient.
