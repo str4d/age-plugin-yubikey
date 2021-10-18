@@ -15,10 +15,10 @@ use yubikey_piv::{
 mod builder;
 mod error;
 mod format;
+mod key;
 mod p256;
 mod plugin;
 mod util;
-mod yubikey;
 
 use error::Error;
 
@@ -148,7 +148,7 @@ impl TryFrom<PluginOptions> for PluginFlags {
 }
 
 fn generate(flags: PluginFlags) -> Result<(), Error> {
-    let mut yubikey = yubikey::open(flags.serial)?;
+    let mut yubikey = key::open(flags.serial)?;
 
     let (stub, recipient, metadata) = builder::IdentityBuilder::new(flags.slot)
         .with_name(flags.name)
@@ -165,9 +165,9 @@ fn generate(flags: PluginFlags) -> Result<(), Error> {
 fn print_single(
     serial: Option<Serial>,
     slot: RetiredSlotId,
-    printer: impl Fn(yubikey::Stub, p256::Recipient, util::Metadata),
+    printer: impl Fn(key::Stub, p256::Recipient, util::Metadata),
 ) -> Result<(), Error> {
-    let mut yubikey = yubikey::open(serial)?;
+    let mut yubikey = key::open(serial)?;
 
     let mut keys = Key::list(&mut yubikey)?.into_iter().filter_map(|key| {
         // - We only use the retired slots.
@@ -184,7 +184,7 @@ fn print_single(
         .find(|(_, s, _)| s == &slot)
         .ok_or(Error::SlotHasNoIdentity(slot))?;
 
-    let stub = yubikey::Stub::new(yubikey.serial(), slot, &recipient);
+    let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
     let metadata = x509_parser::parse_x509_certificate(key.certificate().as_ref())
         .ok()
         .and_then(|(_, cert)| util::Metadata::extract(&mut yubikey, slot, &cert, true))
@@ -199,12 +199,12 @@ fn print_multiple(
     kind: &str,
     serial: Option<Serial>,
     all: bool,
-    printer: impl Fn(yubikey::Stub, p256::Recipient, util::Metadata),
+    printer: impl Fn(key::Stub, p256::Recipient, util::Metadata),
 ) -> Result<(), Error> {
     let mut readers = Readers::open()?;
 
     let mut printed = 0;
-    for reader in readers.iter()?.filter(yubikey::filter_connected) {
+    for reader in readers.iter()?.filter(key::filter_connected) {
         let mut yubikey = reader.open()?;
         if let Some(serial) = serial {
             if yubikey.serial() != serial {
@@ -228,7 +228,7 @@ fn print_multiple(
                 _ => continue,
             };
 
-            let stub = yubikey::Stub::new(yubikey.serial(), slot, &recipient);
+            let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
             let metadata = match x509_parser::parse_x509_certificate(key.certificate().as_ref())
                 .ok()
                 .and_then(|(_, cert)| util::Metadata::extract(&mut yubikey, slot, &cert, all))
@@ -257,7 +257,7 @@ fn print_details(
     kind: &str,
     flags: PluginFlags,
     all: bool,
-    printer: impl Fn(yubikey::Stub, p256::Recipient, util::Metadata),
+    printer: impl Fn(key::Stub, p256::Recipient, util::Metadata),
 ) -> Result<(), Error> {
     if let Some(slot) = flags.slot {
         print_single(flags.serial, slot, printer)
@@ -350,13 +350,13 @@ fn main() -> Result<(), Error> {
         eprintln!("make your choice, or press [Esc] or [q] to quit.");
         eprintln!();
 
-        if !Readers::open()?.iter()?.any(yubikey::is_connected) {
+        if !Readers::open()?.iter()?.any(key::is_connected) {
             eprintln!("⏳ Please insert the YubiKey you want to set up.");
         };
-        let mut readers = yubikey::wait_for_readers()?;
+        let mut readers = key::wait_for_readers()?;
 
         // Filter out readers we can't connect to.
-        let readers_list: Vec<_> = readers.iter()?.filter(yubikey::filter_connected).collect();
+        let readers_list: Vec<_> = readers.iter()?.filter(key::filter_connected).collect();
 
         let reader_names = readers_list
             .iter()
@@ -447,7 +447,7 @@ fn main() -> Result<(), Error> {
                     .with_prompt(&format!("Use existing identity in slot {}?", slot_index))
                     .interact()?
                 {
-                    let stub = yubikey::Stub::new(yubikey.serial(), slot, &recipient);
+                    let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
                     let (_, cert) =
                         x509_parser::parse_x509_certificate(key.certificate().as_ref()).unwrap();
                     let metadata =

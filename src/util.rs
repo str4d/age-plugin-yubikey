@@ -7,7 +7,7 @@ use yubikey_piv::{
     Serial, YubiKey,
 };
 
-use crate::{error::Error, p256::Recipient, yubikey::Stub, BINARY_NAME, USABLE_SLOTS};
+use crate::{error::Error, key::Stub, p256::Recipient, BINARY_NAME, USABLE_SLOTS};
 
 pub(crate) const POLICY_EXTENSION_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 41482, 3, 8];
 
