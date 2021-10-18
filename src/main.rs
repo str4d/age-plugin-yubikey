@@ -5,11 +5,11 @@ use std::io::{self, Write};
 use age_plugin::run_state_machine;
 use dialoguer::{Confirm, Input, Select};
 use gumdrop::Options;
-use yubikey_piv::{
+use yubikey::{
     certificate::PublicKeyInfo,
-    key::{RetiredSlotId, SlotId},
-    policy::{PinPolicy, TouchPolicy},
-    Key, Readers, Serial,
+    piv::{RetiredSlotId, SlotId},
+    reader::Context,
+    Key, PinPolicy, Serial, TouchPolicy,
 };
 
 mod builder;
@@ -201,7 +201,7 @@ fn print_multiple(
     all: bool,
     printer: impl Fn(key::Stub, p256::Recipient, util::Metadata),
 ) -> Result<(), Error> {
-    let mut readers = Readers::open()?;
+    let mut readers = Context::open()?;
 
     let mut printed = 0;
     for reader in readers.iter()?.filter(key::filter_connected) {
@@ -350,7 +350,7 @@ fn main() -> Result<(), Error> {
         eprintln!("make your choice, or press [Esc] or [q] to quit.");
         eprintln!();
 
-        if !Readers::open()?.iter()?.any(key::is_connected) {
+        if !Context::open()?.iter()?.any(key::is_connected) {
             eprintln!("⏳ Please insert the YubiKey you want to set up.");
         };
         let mut readers = key::wait_for_readers()?;

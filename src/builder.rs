@@ -1,10 +1,9 @@
 use rand::{rngs::OsRng, RngCore};
 use x509::RelativeDistinguishedName;
-use yubikey_piv::{
+use yubikey::{
     certificate::{Certificate, PublicKeyInfo},
-    key::{generate as yubikey_generate, AlgorithmId, RetiredSlotId, SlotId},
-    policy::{PinPolicy, TouchPolicy},
-    Key, YubiKey,
+    piv::{generate as yubikey_generate, AlgorithmId, RetiredSlotId, SlotId},
+    Key, PinPolicy, TouchPolicy, YubiKey,
 };
 
 use crate::{

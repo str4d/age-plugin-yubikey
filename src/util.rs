@@ -1,10 +1,9 @@
 use std::fmt;
 
 use x509_parser::{certificate::X509Certificate, der_parser::oid::Oid};
-use yubikey_piv::{
-    key::{RetiredSlotId, SlotId},
-    policy::{PinPolicy, TouchPolicy},
-    Serial, YubiKey,
+use yubikey::{
+    piv::{RetiredSlotId, SlotId},
+    PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
 use crate::{error::Error, key::Stub, p256::Recipient, BINARY_NAME, USABLE_SLOTS};
@@ -144,7 +143,7 @@ impl Metadata {
                     // We can extract the PIN and touch policies via an attestation. This
                     // is slow, but the user has asked for all compatible keys, so...
                     let (pin_policy, touch_policy) =
-                        yubikey_piv::key::attest(yubikey, SlotId::Retired(slot))
+                        yubikey::piv::attest(yubikey, SlotId::Retired(slot))
                             .ok()
                             .and_then(|buf| {
                                 x509_parser::parse_x509_certificate(&buf)

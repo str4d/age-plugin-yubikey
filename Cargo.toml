@@ -32,14 +32,14 @@ env_logger = "0.9"
 gumdrop = "0.8"
 hex = "0.4"
 log = "0.4"
-p256 = { version = "0.7", features = ["ecdh"] }
+p256 = { version = "0.9", features = ["ecdh"] }
 pcsc = "2.4"
-rand = "0.7"
+rand = "0.8"
 sha2 = "0.9"
 which = "4.1"
 x509 = "0.2"
 x509-parser = "0.9"
-yubikey-piv = { version = "0.3", features = ["untested"] }
+yubikey = { version = "0.4", features = ["untested"] }
 
 [dev-dependencies]
 flate2 = "1"
