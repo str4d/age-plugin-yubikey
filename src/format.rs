@@ -1,10 +1,10 @@
 use age_core::{
     format::{FileKey, Stanza},
     primitives::{aead_encrypt, hkdf},
+    secrecy::ExposeSecret,
 };
 use p256::{ecdh::EphemeralSecret, elliptic_curve::sec1::ToEncodedPoint};
 use rand::rngs::OsRng;
-use secrecy::ExposeSecret;
 use std::convert::TryInto;
 
 use crate::{p256::Recipient, STANZA_TAG};

@@ -3,12 +3,12 @@
 use age_core::{
     format::{FileKey, FILE_KEY_BYTES},
     primitives::{aead_decrypt, hkdf},
+    secrecy::ExposeSecret,
 };
 use age_plugin::{identity, Callbacks};
 use bech32::{ToBase32, Variant};
 use dialoguer::Password;
 use log::warn;
-use secrecy::ExposeSecret;
 use std::convert::TryInto;
 use std::fmt;
 use std::io;

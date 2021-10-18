@@ -22,8 +22,8 @@ assets = [
 ]
 
 [dependencies]
-age-core = "0.6"
-age-plugin = "0.1"
+age-core = "0.7"
+age-plugin = "0.2"
 base64 = "0.13"
 bech32 = "0.8"
 console = "0.14"
@@ -35,7 +35,6 @@ log = "0.4"
 p256 = { version = "0.7", features = ["ecdh"] }
 pcsc = "2.4"
 rand = "0.7"
-secrecy = "0.7"
 sha2 = "0.9"
 which = "4.1"
 x509 = "0.2"
