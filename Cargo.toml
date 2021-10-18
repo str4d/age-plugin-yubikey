@@ -26,8 +26,8 @@ age-core = "0.7"
 age-plugin = "0.2"
 base64 = "0.13"
 bech32 = "0.8"
-console = "0.14"
-dialoguer = "0.8"
+console = { version = "0.15", default-features = false }
+dialoguer = { version = "0.9", default-features = false, features = ["password"] }
 env_logger = "0.8"
 gumdrop = "0.8"
 hex = "0.4"
