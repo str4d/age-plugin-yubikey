@@ -38,8 +38,8 @@ rand = "0.8"
 sha2 = "0.9"
 which = "4.1"
 x509 = "0.2"
-x509-parser = "0.9"
-yubikey = { version = "0.4", features = ["untested"] }
+x509-parser = "0.12"
+yubikey = { version = "0.5", features = ["untested"] }
 
 [dev-dependencies]
 flate2 = "1"

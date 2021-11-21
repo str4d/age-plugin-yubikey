@@ -110,8 +110,8 @@ impl Metadata {
         // using the same certificate extension as PIV attestations.
         // https://developers.yubico.com/PIV/Introduction/PIV_attestation.html
         let policies = |c: &X509Certificate| {
-            c.extensions()
-                .get(&Oid::from(POLICY_EXTENSION_OID).unwrap())
+            c.tbs_certificate
+                .find_extension(&Oid::from(POLICY_EXTENSION_OID).unwrap())
                 // If the encoded extension doesn't have 2 bytes, we assume it is invalid.
                 .filter(|policy| policy.value.len() >= 2)
                 .map(|policy| {
