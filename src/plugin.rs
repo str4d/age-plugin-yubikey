@@ -7,12 +7,12 @@ use age_plugin::{
 use std::collections::HashMap;
 use std::io;
 
-use crate::{format, p256::Recipient, yubikey, PLUGIN_NAME};
+use crate::{format, key, p256::Recipient, PLUGIN_NAME};
 
 #[derive(Debug, Default)]
 pub(crate) struct RecipientPlugin {
     recipients: Vec<Recipient>,
-    yubikeys: Vec<yubikey::Stub>,
+    yubikeys: Vec<key::Stub>,
 }
 
 impl RecipientPluginV1 for RecipientPlugin {
@@ -44,7 +44,7 @@ impl RecipientPluginV1 for RecipientPlugin {
         bytes: &[u8],
     ) -> Result<(), recipient::Error> {
         if let Some(stub) = if plugin_name == PLUGIN_NAME {
-            yubikey::Stub::from_bytes(bytes, index)
+            key::Stub::from_bytes(bytes, index)
         } else {
             None
         } {
@@ -100,7 +100,7 @@ impl RecipientPluginV1 for RecipientPlugin {
 
 #[derive(Debug, Default)]
 pub(crate) struct IdentityPlugin {
-    yubikeys: Vec<yubikey::Stub>,
+    yubikeys: Vec<key::Stub>,
 }
 
 impl IdentityPluginV1 for IdentityPlugin {
@@ -111,7 +111,7 @@ impl IdentityPluginV1 for IdentityPlugin {
         bytes: &[u8],
     ) -> Result<(), identity::Error> {
         if let Some(stub) = if plugin_name == PLUGIN_NAME {
-            yubikey::Stub::from_bytes(bytes, index)
+            key::Stub::from_bytes(bytes, index)
         } else {
             None
         } {
@@ -133,14 +133,11 @@ impl IdentityPluginV1 for IdentityPlugin {
         let mut file_keys = HashMap::with_capacity(files.len());
 
         // Filter to files / stanzas for which we have matching YubiKeys
-        let mut candidate_stanzas: Vec<(
-            &yubikey::Stub,
-            HashMap<usize, Vec<format::RecipientLine>>,
-        )> = self
-            .yubikeys
-            .iter()
-            .map(|stub| (stub, HashMap::new()))
-            .collect();
+        let mut candidate_stanzas: Vec<(&key::Stub, HashMap<usize, Vec<format::RecipientLine>>)> =
+            self.yubikeys
+                .iter()
+                .map(|stub| (stub, HashMap::new()))
+                .collect();
 
         for (file, stanzas) in files.iter().enumerate() {
             for (stanza_index, stanza) in stanzas.iter().enumerate() {

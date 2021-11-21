@@ -1,6 +1,6 @@
 use std::fmt;
 use std::io;
-use yubikey_piv::{key::RetiredSlotId, Serial};
+use yubikey::{piv::RetiredSlotId, Serial};
 
 use crate::util::slot_to_ui;
 
@@ -21,7 +21,7 @@ pub enum Error {
     SlotIsNotEmpty(RetiredSlotId),
     TimedOut,
     UseListForSingleSlot,
-    YubiKey(yubikey_piv::Error),
+    YubiKey(yubikey::Error),
 }
 
 impl From<io::Error> for Error {
@@ -30,8 +30,8 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<yubikey_piv::error::Error> for Error {
-    fn from(e: yubikey_piv::error::Error) -> Self {
+impl From<yubikey::Error> for Error {
+    fn from(e: yubikey::Error) -> Self {
         Error::YubiKey(e)
     }
 }
@@ -100,10 +100,10 @@ impl fmt::Debug for Error {
                 writeln!(f, "Use --list to print the recipient for a single slot.")?
             }
             Error::YubiKey(e) => match e {
-                yubikey_piv::error::Error::NotFound => {
+                yubikey::Error::NotFound => {
                     writeln!(f, "Please insert the YubiKey you want to set up")?
                 }
-                yubikey_piv::error::Error::WrongPin { tries } => writeln!(
+                yubikey::Error::WrongPin { tries } => writeln!(
                     f,
                     "Invalid PIN ({} tries remaining before it is blocked)",
                     tries

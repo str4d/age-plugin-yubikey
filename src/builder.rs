@@ -1,17 +1,16 @@
 use rand::{rngs::OsRng, RngCore};
 use x509::RelativeDistinguishedName;
-use yubikey_piv::{
+use yubikey::{
     certificate::{Certificate, PublicKeyInfo},
-    key::{generate as yubikey_generate, AlgorithmId, RetiredSlotId, SlotId},
-    policy::{PinPolicy, TouchPolicy},
-    Key, YubiKey,
+    piv::{generate as yubikey_generate, AlgorithmId, RetiredSlotId, SlotId},
+    Key, PinPolicy, TouchPolicy, YubiKey,
 };
 
 use crate::{
     error::Error,
+    key::{self, Stub},
     p256::Recipient,
     util::{Metadata, POLICY_EXTENSION_OID},
-    yubikey::{self, Stub},
     BINARY_NAME, USABLE_SLOTS,
 };
 
@@ -90,7 +89,7 @@ impl IdentityBuilder {
         // No need to ask for users to enter their PIN if the PIN policy requires it,
         // because here we _always_ require them to enter their PIN in order to access the
         // protected management key (which is necessary in order to generate identities).
-        yubikey::manage(yubikey)?;
+        key::manage(yubikey)?;
 
         if let TouchPolicy::Never = touch_policy {
             // No need to touch YubiKey

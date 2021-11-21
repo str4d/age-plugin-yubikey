@@ -3,25 +3,23 @@
 use age_core::{
     format::{FileKey, FILE_KEY_BYTES},
     primitives::{aead_decrypt, hkdf},
+    secrecy::ExposeSecret,
 };
 use age_plugin::{identity, Callbacks};
 use bech32::{ToBase32, Variant};
 use dialoguer::Password;
 use log::warn;
-use secrecy::ExposeSecret;
 use std::convert::TryInto;
 use std::fmt;
 use std::io;
 use std::iter;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
-use yubikey_piv::{
+use yubikey::{
     certificate::{Certificate, PublicKeyInfo},
-    key::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
-    policy::PinPolicy,
-    readers::Reader,
-    yubikey::Serial,
-    MgmKey, Readers, YubiKey,
+    piv::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
+    reader::{Context, Reader},
+    MgmKey, PinPolicy, Serial, YubiKey,
 };
 
 use crate::{
@@ -56,11 +54,11 @@ pub(crate) fn filter_connected(reader: &Reader) -> bool {
     }
 }
 
-pub(crate) fn wait_for_readers() -> Result<Readers, Error> {
+pub(crate) fn wait_for_readers() -> Result<Context, Error> {
     // Start a 15-second timer waiting for a YubiKey to be inserted (if necessary).
     let start = SystemTime::now();
     loop {
-        let mut readers = Readers::open()?;
+        let mut readers = Context::open()?;
         if readers.iter()?.any(is_connected) {
             break Ok(readers);
         }
@@ -73,7 +71,7 @@ pub(crate) fn wait_for_readers() -> Result<Readers, Error> {
 }
 
 pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
-    if !Readers::open()?.iter()?.any(is_connected) {
+    if !Context::open()?.iter()?.any(is_connected) {
         if let Some(serial) = serial {
             eprintln!("⏳ Please insert the YubiKey with serial {}.", serial);
         } else {
@@ -157,7 +155,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
             .map_err(|_| Error::CustomManagementKey)?;
 
         // Migrate to a PIN-protected management key.
-        let mgm_key = MgmKey::generate()?;
+        let mgm_key = MgmKey::generate();
         eprintln!();
         eprintln!("✨ Your YubiKey is using the default management key.");
         eprintln!("✨ We'll migrate it to a PIN-protected management key.");
@@ -247,7 +245,7 @@ impl Stub {
     ) -> io::Result<Result<Connection, identity::Error>> {
         let mut yubikey = match YubiKey::open_by_serial(self.serial) {
             Ok(yk) => yk,
-            Err(yubikey_piv::Error::NotFound) => {
+            Err(yubikey::Error::NotFound) => {
                 if callbacks
                     .message(&format!(
                         "Please insert YubiKey with serial {}",
@@ -266,7 +264,7 @@ impl Stub {
                 loop {
                     match YubiKey::open_by_serial(self.serial) {
                         Ok(yubikey) => break yubikey,
-                        Err(yubikey_piv::Error::NotFound) => (),
+                        Err(yubikey::Error::NotFound) => (),
                         Err(_) => {
                             return Ok(Err(identity::Error::Identity {
                                 index: self.identity_index,
@@ -425,7 +423,7 @@ impl Connection {
 
 #[cfg(test)]
 mod tests {
-    use yubikey_piv::{key::RetiredSlotId, Serial};
+    use yubikey::{piv::RetiredSlotId, Serial};
 
     use super::Stub;
 

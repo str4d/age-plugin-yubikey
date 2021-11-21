@@ -1,13 +1,12 @@
 use std::fmt;
 
 use x509_parser::{certificate::X509Certificate, der_parser::oid::Oid};
-use yubikey_piv::{
-    key::{RetiredSlotId, SlotId},
-    policy::{PinPolicy, TouchPolicy},
-    Serial, YubiKey,
+use yubikey::{
+    piv::{RetiredSlotId, SlotId},
+    PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
-use crate::{error::Error, p256::Recipient, yubikey::Stub, BINARY_NAME, USABLE_SLOTS};
+use crate::{error::Error, key::Stub, p256::Recipient, BINARY_NAME, USABLE_SLOTS};
 
 pub(crate) const POLICY_EXTENSION_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 41482, 3, 8];
 
@@ -111,8 +110,8 @@ impl Metadata {
         // using the same certificate extension as PIV attestations.
         // https://developers.yubico.com/PIV/Introduction/PIV_attestation.html
         let policies = |c: &X509Certificate| {
-            c.extensions()
-                .get(&Oid::from(POLICY_EXTENSION_OID).unwrap())
+            c.tbs_certificate
+                .find_extension(&Oid::from(POLICY_EXTENSION_OID).unwrap())
                 // If the encoded extension doesn't have 2 bytes, we assume it is invalid.
                 .filter(|policy| policy.value.len() >= 2)
                 .map(|policy| {
@@ -144,7 +143,7 @@ impl Metadata {
                     // We can extract the PIN and touch policies via an attestation. This
                     // is slow, but the user has asked for all compatible keys, so...
                     let (pin_policy, touch_policy) =
-                        yubikey_piv::key::attest(yubikey, SlotId::Retired(slot))
+                        yubikey::piv::attest(yubikey, SlotId::Retired(slot))
                             .ok()
                             .and_then(|buf| {
                                 x509_parser::parse_x509_certificate(&buf)

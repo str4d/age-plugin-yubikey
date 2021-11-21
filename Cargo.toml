@@ -22,25 +22,24 @@ assets = [
 ]
 
 [dependencies]
-age-core = "0.6"
-age-plugin = "0.1"
+age-core = "0.7"
+age-plugin = "0.2"
 base64 = "0.13"
 bech32 = "0.8"
-console = "0.14"
-dialoguer = "0.8"
-env_logger = "0.8"
+console = { version = "0.15", default-features = false }
+dialoguer = { version = "0.9", default-features = false, features = ["password"] }
+env_logger = "0.9"
 gumdrop = "0.8"
 hex = "0.4"
 log = "0.4"
-p256 = { version = "0.7", features = ["ecdh"] }
+p256 = { version = "0.9", features = ["ecdh"] }
 pcsc = "2.4"
-rand = "0.7"
-secrecy = "0.7"
+rand = "0.8"
 sha2 = "0.9"
 which = "4.1"
 x509 = "0.2"
-x509-parser = "0.9"
-yubikey-piv = { version = "0.3", features = ["untested"] }
+x509-parser = "0.12"
+yubikey = { version = "0.5", features = ["untested"] }
 
 [dev-dependencies]
 flate2 = "1"
