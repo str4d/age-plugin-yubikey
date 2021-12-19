@@ -14,12 +14,12 @@ use std::fmt;
 use std::io;
 use std::iter;
 use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 use yubikey::{
     certificate::{Certificate, PublicKeyInfo},
     piv::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
     reader::{Context, Reader},
-    MgmKey, PinPolicy, Serial, YubiKey,
+    MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
 use crate::{
@@ -323,6 +323,8 @@ impl Stub {
             slot: self.slot,
             tag: self.tag,
             identity_index: self.identity_index,
+            cached_metadata: None,
+            last_touch: None,
         }))
     }
 }
@@ -334,6 +336,8 @@ pub(crate) struct Connection {
     slot: RetiredSlotId,
     tag: [u8; 4],
     identity_index: usize,
+    cached_metadata: Option<Metadata>,
+    last_touch: Option<Instant>,
 }
 
 impl Connection {
@@ -346,20 +350,23 @@ impl Connection {
         callbacks: &mut dyn Callbacks<E>,
     ) -> io::Result<Result<(), identity::Error>> {
         // Check if we can skip requesting a PIN.
-        let (_, cert) = x509_parser::parse_x509_certificate(self.cert.as_ref()).unwrap();
-        match Metadata::extract(&mut self.yubikey, self.slot, &cert, true) {
-            Some(metadata) => {
-                if let Some(PinPolicy::Never) = metadata.pin_policy {
-                    return Ok(Ok(()));
-                }
-            }
-            None => {
-                return Ok(Err(identity::Error::Identity {
-                    index: self.identity_index,
-                    message: "Certificate for YubiKey identity contains an invalid PIN policy"
-                        .to_string(),
-                }))
-            }
+        if self.cached_metadata.is_none() {
+            let (_, cert) = x509_parser::parse_x509_certificate(self.cert.as_ref()).unwrap();
+            self.cached_metadata =
+                match Metadata::extract(&mut self.yubikey, self.slot, &cert, true) {
+                    None => {
+                        return Ok(Err(identity::Error::Identity {
+                            index: self.identity_index,
+                            message:
+                                "Certificate for YubiKey identity contains an invalid PIN policy"
+                                    .to_string(),
+                        }))
+                    }
+                    metadata => metadata,
+                };
+        }
+        if let Some(PinPolicy::Never) = self.cached_metadata.as_ref().and_then(|m| m.pin_policy) {
+            return Ok(Ok(()));
         }
 
         // The policy requires a PIN, so request it.
@@ -389,8 +396,28 @@ impl Connection {
         Ok(Ok(()))
     }
 
-    pub(crate) fn unwrap_file_key(&mut self, line: &RecipientLine) -> Result<FileKey, ()> {
+    pub(crate) fn unwrap_file_key<E>(
+        &mut self,
+        line: &RecipientLine,
+        callbacks: &mut dyn Callbacks<E>,
+    ) -> io::Result<Result<FileKey, ()>> {
         assert_eq!(self.tag, line.tag);
+
+        // If the touch policy requires it, request a touch.
+        let requested_touch = match (
+            self.cached_metadata.as_ref().and_then(|m| m.touch_policy),
+            self.last_touch,
+        ) {
+            (Some(TouchPolicy::Always), _) | (Some(TouchPolicy::Cached), None) => {
+                callbacks.message("Please touch the YubiKey...")?.unwrap();
+                true
+            }
+            (Some(TouchPolicy::Cached), Some(last)) if last.elapsed() >= FIFTEEN_SECONDS => {
+                callbacks.message("Please touch the YubiKey...")?.unwrap();
+                true
+            }
+            _ => false,
+        };
 
         // The YubiKey API for performing scalar multiplication takes the point in its
         // uncompressed SEC-1 encoding.
@@ -401,8 +428,17 @@ impl Connection {
             SlotId::Retired(self.slot),
         ) {
             Ok(res) => res,
-            Err(_) => return Err(()),
+            Err(_) => return Ok(Err(())),
         };
+
+        // If we requested a touch and reached here, the user touched the YubiKey.
+        if requested_touch {
+            if let Some(TouchPolicy::Cached) =
+                self.cached_metadata.as_ref().and_then(|m| m.touch_policy)
+            {
+                self.last_touch = Some(Instant::now());
+            }
+        }
 
         let mut salt = vec![];
         salt.extend_from_slice(line.epk_bytes.as_bytes());
@@ -413,10 +449,10 @@ impl Connection {
         // A failure to decrypt is fatal, because we assume that we won't
         // encounter 32-bit collisions on the key tag embedded in the header.
         match aead_decrypt(&enc_key, FILE_KEY_BYTES, &line.encrypted_file_key) {
-            Ok(pt) => Ok(TryInto::<[u8; FILE_KEY_BYTES]>::try_into(&pt[..])
+            Ok(pt) => Ok(Ok(TryInto::<[u8; FILE_KEY_BYTES]>::try_into(&pt[..])
                 .unwrap()
-                .into()),
-            Err(_) => Err(()),
+                .into())),
+            Err(_) => Ok(Err(())),
         }
     }
 }

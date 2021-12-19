@@ -96,7 +96,7 @@ pub(crate) struct Metadata {
     name: String,
     created: String,
     pub(crate) pin_policy: Option<PinPolicy>,
-    touch_policy: Option<TouchPolicy>,
+    pub(crate) touch_policy: Option<TouchPolicy>,
 }
 
 impl Metadata {
