@@ -409,11 +409,11 @@ impl Connection {
             self.last_touch,
         ) {
             (Some(TouchPolicy::Always), _) | (Some(TouchPolicy::Cached), None) => {
-                callbacks.message("Please touch the YubiKey...")?.unwrap();
+                callbacks.message("👆 Please touch the YubiKey")?.unwrap();
                 true
             }
             (Some(TouchPolicy::Cached), Some(last)) if last.elapsed() >= FIFTEEN_SECONDS => {
-                callbacks.message("Please touch the YubiKey...")?.unwrap();
+                callbacks.message("👆 Please touch the YubiKey")?.unwrap();
                 true
             }
             _ => false,
