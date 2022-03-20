@@ -76,7 +76,7 @@ jobs:
         if: matrix.name == 'windows'
 
       - name: Upload archive to release
-        uses: svenstaro/upload-release-action@2.2.0
+        uses: svenstaro/upload-release-action@2.2.1
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ matrix.archive_name }}
@@ -137,7 +137,7 @@ jobs:
           args: --package age-plugin-yubikey --no-build --target ${{ matrix.target }}
 
       - name: Upload Debian package to release
-        uses: svenstaro/upload-release-action@2.2.0
+        uses: svenstaro/upload-release-action@2.2.1
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/${{ matrix.target }}/debian/*.deb
