@@ -12,7 +12,7 @@ or one that you do not care about.
 On Windows, Linux, and macOS, you can use the
 [pre-built binaries](https://github.com/str4d/age-plugin-yubikey/releases).
 
-If your system has Rust 1.51+ installed (either via `rustup` or a system
+If your system has Rust 1.56+ installed (either via `rustup` or a system
 package), you can build directly from source:
 
 ```
