@@ -143,9 +143,10 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: 1.51.0
+          components: rustfmt
           override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
+      - name: Check formatting
+        uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: -- --check
