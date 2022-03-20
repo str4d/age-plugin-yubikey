@@ -5,7 +5,6 @@ use age_core::{
 };
 use p256::{ecdh::EphemeralSecret, elliptic_curve::sec1::ToEncodedPoint};
 use rand::rngs::OsRng;
-use std::convert::TryInto;
 
 use crate::{p256::Recipient, STANZA_TAG};
 

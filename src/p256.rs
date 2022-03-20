@@ -1,7 +1,6 @@
 use bech32::{ToBase32, Variant};
 use p256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use sha2::{Digest, Sha256};
-use std::convert::TryInto;
 use std::fmt;
 
 use crate::RECIPIENT_PREFIX;
