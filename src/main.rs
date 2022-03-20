@@ -1,4 +1,5 @@
-use std::convert::{TryFrom, TryInto};
+#![forbid(unsafe_code)]
+
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 

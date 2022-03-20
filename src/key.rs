@@ -9,7 +9,6 @@ use age_plugin::{identity, Callbacks};
 use bech32::{ToBase32, Variant};
 use dialoguer::Password;
 use log::warn;
-use std::convert::TryInto;
 use std::fmt;
 use std::io;
 use std::iter;
