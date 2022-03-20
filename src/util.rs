@@ -1,4 +1,5 @@
 use std::fmt;
+use std::iter;
 
 use x509_parser::{certificate::X509Certificate, der_parser::oid::Oid};
 use yubikey::{
@@ -59,6 +60,15 @@ pub(crate) fn touch_policy_to_str(policy: Option<TouchPolicy>) -> &'static str {
         Some(TouchPolicy::Never) => "Never  (A physical touch is NOT required to decrypt)",
         _ => "Unknown",
     }
+}
+
+const MODHEX: &str = "cbdefghijklnrtuv";
+pub(crate) fn otp_serial_prefix(serial: Serial) -> String {
+    iter::repeat(0)
+        .take(4)
+        .chain((0..8).rev().map(|i| (serial.0 >> (4 * i)) & 0x0f))
+        .map(|i| MODHEX.char_indices().nth(i as usize).unwrap().1)
+        .collect()
 }
 
 pub(crate) fn extract_name(cert: &X509Certificate, all: bool) -> Option<(String, bool)> {

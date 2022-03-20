@@ -26,7 +26,7 @@ use crate::{
     error::Error,
     format::{RecipientLine, STANZA_KEY_LABEL},
     p256::{Recipient, TAG_BYTES},
-    util::Metadata,
+    util::{otp_serial_prefix, Metadata},
     IDENTITY_PREFIX,
 };
 
@@ -372,20 +372,47 @@ impl Connection {
         // The policy requires a PIN, so request it.
         // Note that we can't distinguish between PinPolicy::Once and PinPolicy::Always
         // because this plugin is ephemeral, so we always request the PIN.
-        let pin = match callbacks.request_secret(&format!(
+        let mut message = format!(
             "Enter PIN for YubiKey with serial {}",
             self.yubikey.serial()
-        ))? {
-            Ok(pin) => pin,
-            Err(_) => {
-                return Ok(Err(identity::Error::Identity {
-                    index: self.identity_index,
-                    message: format!(
-                        "A PIN is required for YubiKey with serial {}",
+        );
+        let pin = loop {
+            message = match callbacks.request_secret(&message)? {
+                Ok(pin) => match pin.expose_secret().len() {
+                    // A PIN must be between 6 and 8 characters.
+                    6..=8 => break pin,
+                    // If the string is 44 bytes and starts with the YubiKey's serial
+                    // encoded as 12-byte modhex, the user probably touched the YubiKey
+                    // early and "typed" an OTP.
+                    44 if pin
+                        .expose_secret()
+                        .starts_with(&otp_serial_prefix(self.yubikey.serial())) =>
+                    {
+                        format!(
+                            "Did you touch the YubiKey by accident? Enter PIN for YubiKey with serial {}",
+                            self.yubikey.serial()
+                        )
+                    }
+                    // Otherwise, the PIN is either too short or too long.
+                    0..=5 => format!(
+                        "PIN was too short. Enter PIN for YubiKey with serial {}",
                         self.yubikey.serial()
                     ),
-                }))
-            }
+                    _ => format!(
+                        "PIN was too long. Enter PIN for YubiKey with serial {}",
+                        self.yubikey.serial()
+                    ),
+                },
+                Err(_) => {
+                    return Ok(Err(identity::Error::Identity {
+                        index: self.identity_index,
+                        message: format!(
+                            "A PIN is required for YubiKey with serial {}",
+                            self.yubikey.serial()
+                        ),
+                    }))
+                }
+            };
         };
         if let Err(e) = self.yubikey.verify_pin(pin.expose_secret().as_bytes()) {
             return Ok(Err(identity::Error::Identity {
