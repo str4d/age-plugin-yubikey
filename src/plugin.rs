@@ -68,7 +68,15 @@ impl RecipientPluginV1 for RecipientPlugin {
         let mut yk_errors = vec![];
         for stub in &self.yubikeys {
             match stub.connect(&mut callbacks)? {
-                Ok(conn) => yk_recipients.push(conn.recipient().clone()),
+                Ok(Some(conn)) => yk_recipients.push(conn.recipient().clone()),
+                Ok(None) => yk_errors.push(recipient::Error::Identity {
+                    index: stub.identity_index,
+                    message: i18n_embed_fl::fl!(
+                        crate::LANGUAGE_LOADER,
+                        "plugin-err-yk-opening",
+                        yubikey_serial = stub.serial.to_string(),
+                    ),
+                }),
                 Err(e) => yk_errors.push(match e {
                     identity::Error::Identity { index, message } => {
                         recipient::Error::Identity { index, message }
@@ -203,7 +211,11 @@ impl IdentityPluginV1 for IdentityPlugin {
 
         for (stub, files) in candidate_stanzas.iter() {
             let mut conn = match stub.connect(&mut callbacks)? {
-                Ok(conn) => conn,
+                // The user skipped this YubiKey.
+                Ok(None) => continue,
+                // We connected to this YubiKey.
+                Ok(Some(conn)) => conn,
+                // We failed to connect to this YubiKey.
                 Err(e) => {
                     callbacks.error(e)?.unwrap();
                     continue;

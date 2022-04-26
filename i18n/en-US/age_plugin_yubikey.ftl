@@ -151,6 +151,9 @@ plugin-err-invalid-stanza    = Invalid {-yubikey} stanza
 plugin-err-decryption-failed = Failed to decrypt {-yubikey} stanza
 
 plugin-insert-yk            = Please insert {-yubikey} with serial {$yubikey_serial}
+plugin-yk-is-plugged-in     = {-yubikey} is plugged in
+plugin-skip-this-yk         = Skip this {-yubikey}
+plugin-insert-yk-retry      = Could not open {-yubikey}. Please insert {-yubikey} with serial {$yubikey_serial}
 plugin-err-yk-not-found     = Could not find {-yubikey} with serial {$yubikey_serial}
 plugin-err-yk-opening       = Could not open {-yubikey} with serial {$yubikey_serial}
 plugin-err-yk-timed-out     = Timed out while waiting for {-yubikey} with serial {$yubikey_serial} to be inserted

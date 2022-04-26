@@ -199,7 +199,7 @@ pub struct Stub {
     pub(crate) serial: Serial,
     pub(crate) slot: RetiredSlotId,
     pub(crate) tag: [u8; TAG_BYTES],
-    identity_index: usize,
+    pub(crate) identity_index: usize,
 }
 
 impl fmt::Display for Stub {
@@ -260,38 +260,53 @@ impl Stub {
         self.tag == line.tag
     }
 
+    /// Returns:
+    /// - `Ok(Ok(Some(connection)))` if we successfully connected to this YubiKey.
+    /// - `Ok(Ok(None))` if the user told us to skip this YubiKey.
+    /// - `Ok(Err(_))` if we encountered an error while trying to connect to the YubiKey.
+    /// - `Err(_)` on communication errors with the age client.
     pub(crate) fn connect<E>(
         &self,
         callbacks: &mut dyn Callbacks<E>,
-    ) -> io::Result<Result<Connection, identity::Error>> {
+    ) -> io::Result<Result<Option<Connection>, identity::Error>> {
         let mut yubikey = match YubiKey::open_by_serial(self.serial) {
             Ok(yk) => yk,
             Err(yubikey::Error::NotFound) => {
-                if callbacks
-                    .message(&i18n_embed_fl::fl!(
-                        crate::LANGUAGE_LOADER,
-                        "plugin-insert-yk",
-                        yubikey_serial = self.serial.to_string(),
-                    ))?
-                    .is_err()
-                {
-                    return Ok(Err(identity::Error::Identity {
-                        index: self.identity_index,
-                        message: i18n_embed_fl::fl!(
-                            crate::LANGUAGE_LOADER,
-                            "plugin-err-yk-not-found",
-                            yubikey_serial = self.serial.to_string(),
-                        ),
-                    }));
-                }
+                let mut message = i18n_embed_fl::fl!(
+                    crate::LANGUAGE_LOADER,
+                    "plugin-insert-yk",
+                    yubikey_serial = self.serial.to_string(),
+                );
 
-                // Start a 15-second timer waiting for the YubiKey to be inserted
-                let start = SystemTime::now();
-                loop {
-                    match YubiKey::open_by_serial(self.serial) {
-                        Ok(yubikey) => break yubikey,
-                        Err(yubikey::Error::NotFound) => (),
-                        Err(_) => {
+                // If the `confirm` command is available, we loop until either the YubiKey
+                // we want is inserted, or the used explicitly skips.
+                let yubikey = loop {
+                    match callbacks.confirm(
+                        &message,
+                        &fl!("plugin-yk-is-plugged-in"),
+                        Some(&fl!("plugin-skip-this-yk")),
+                    )? {
+                        // `confirm` command is not available.
+                        Err(age_core::plugin::Error::Unsupported) => break None,
+                        // User told us to skip this key.
+                        Ok(false) => return Ok(Ok(None)),
+                        // User said they plugged it in; try it.
+                        Ok(true) => match YubiKey::open_by_serial(self.serial) {
+                            Ok(yubikey) => break Some(yubikey),
+                            Err(yubikey::Error::NotFound) => (),
+                            Err(_) => {
+                                return Ok(Err(identity::Error::Identity {
+                                    index: self.identity_index,
+                                    message: i18n_embed_fl::fl!(
+                                        crate::LANGUAGE_LOADER,
+                                        "plugin-err-yk-opening",
+                                        yubikey_serial = self.serial.to_string(),
+                                    ),
+                                }));
+                            }
+                        },
+                        // We can't communicate with the user.
+                        Err(age_core::plugin::Error::Fail) => {
                             return Ok(Err(identity::Error::Identity {
                                 index: self.identity_index,
                                 message: i18n_embed_fl::fl!(
@@ -299,22 +314,65 @@ impl Stub {
                                     "plugin-err-yk-opening",
                                     yubikey_serial = self.serial.to_string(),
                                 ),
-                            }));
+                            }))
                         }
                     }
 
-                    match SystemTime::now().duration_since(start) {
-                        Ok(end) if end >= FIFTEEN_SECONDS => {
-                            return Ok(Err(identity::Error::Identity {
-                                index: self.identity_index,
-                                message: i18n_embed_fl::fl!(
-                                    crate::LANGUAGE_LOADER,
-                                    "plugin-err-yk-timed-out",
-                                    yubikey_serial = self.serial.to_string(),
-                                ),
-                            }))
+                    // We're going to loop around, meaning that the first attempt failed.
+                    // Change the message to indicate this to the user.
+                    message = i18n_embed_fl::fl!(
+                        crate::LANGUAGE_LOADER,
+                        "plugin-insert-yk-retry",
+                        yubikey_serial = self.serial.to_string(),
+                    );
+                };
+
+                if let Some(yk) = yubikey {
+                    yk
+                } else {
+                    // `confirm` is not available; fall back to `message` with a timeout.
+                    if callbacks.message(&message)?.is_err() {
+                        return Ok(Err(identity::Error::Identity {
+                            index: self.identity_index,
+                            message: i18n_embed_fl::fl!(
+                                crate::LANGUAGE_LOADER,
+                                "plugin-err-yk-not-found",
+                                yubikey_serial = self.serial.to_string(),
+                            ),
+                        }));
+                    }
+
+                    // Start a 15-second timer waiting for the YubiKey to be inserted
+                    let start = SystemTime::now();
+                    loop {
+                        match YubiKey::open_by_serial(self.serial) {
+                            Ok(yubikey) => break yubikey,
+                            Err(yubikey::Error::NotFound) => (),
+                            Err(_) => {
+                                return Ok(Err(identity::Error::Identity {
+                                    index: self.identity_index,
+                                    message: i18n_embed_fl::fl!(
+                                        crate::LANGUAGE_LOADER,
+                                        "plugin-err-yk-opening",
+                                        yubikey_serial = self.serial.to_string(),
+                                    ),
+                                }));
+                            }
                         }
-                        _ => sleep(ONE_SECOND),
+
+                        match SystemTime::now().duration_since(start) {
+                            Ok(end) if end >= FIFTEEN_SECONDS => {
+                                return Ok(Err(identity::Error::Identity {
+                                    index: self.identity_index,
+                                    message: i18n_embed_fl::fl!(
+                                        crate::LANGUAGE_LOADER,
+                                        "plugin-err-yk-timed-out",
+                                        yubikey_serial = self.serial.to_string(),
+                                    ),
+                                }))
+                            }
+                            _ => sleep(ONE_SECOND),
+                        }
                     }
                 }
             }
@@ -348,7 +406,7 @@ impl Stub {
             }
         };
 
-        Ok(Ok(Connection {
+        Ok(Ok(Some(Connection {
             yubikey,
             cert,
             pk,
@@ -357,7 +415,7 @@ impl Stub {
             identity_index: self.identity_index,
             cached_metadata: None,
             last_touch: None,
-        }))
+        })))
     }
 }
 
