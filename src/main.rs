@@ -6,6 +6,12 @@ use std::io::{self, Write};
 use age_plugin::run_state_machine;
 use dialoguer::{Confirm, Input, Select};
 use gumdrop::Options;
+use i18n_embed::{
+    fluent::{fluent_language_loader, FluentLanguageLoader},
+    DesktopLanguageRequester,
+};
+use lazy_static::lazy_static;
+use rust_embed::RustEmbed;
 use yubikey::{
     certificate::PublicKeyInfo,
     piv::{RetiredSlotId, SlotId},
@@ -51,6 +57,23 @@ const USABLE_SLOTS: [RetiredSlotId; 20] = [
     RetiredSlotId::R19,
     RetiredSlotId::R20,
 ];
+
+#[derive(RustEmbed)]
+#[folder = "i18n"]
+struct Translations;
+
+const TRANSLATIONS: Translations = Translations {};
+
+lazy_static! {
+    static ref LANGUAGE_LOADER: FluentLanguageLoader = fluent_language_loader!();
+}
+
+#[macro_export]
+macro_rules! fl {
+    ($message_id:literal) => {{
+        i18n_embed_fl::fl!($crate::LANGUAGE_LOADER, $message_id)
+    }};
+}
 
 #[derive(Debug, Options)]
 struct PluginOptions {
@@ -300,6 +323,12 @@ fn main() -> Result<(), Error> {
         .filter_level(log::LevelFilter::Off)
         .parse_default_env()
         .init();
+
+    let requested_languages = DesktopLanguageRequester::requested_languages();
+    i18n_embed::select(&*LANGUAGE_LOADER, &TRANSLATIONS, &requested_languages).unwrap();
+    // Unfortunately the common Windows terminals don't support Unicode Directionality
+    // Isolation Marks, so we disable them for now.
+    LANGUAGE_LOADER.set_use_isolating(false);
 
     let opts = PluginOptions::parse_args_default_or_exit();
 
