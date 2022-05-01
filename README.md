@@ -98,8 +98,15 @@ enabling YubiKeys to be used simultaneously with age and SSH.
 
 ### Manual setup and technical details
 
-`age-plugin-yubikey` only officially supports YubiKeys set up either via the
-text interface or the `--generate` flag.
+`age-plugin-yubikey` only officially supports the following YubiKey variants,
+set up either via the text interface or the `--generate` flag:
+
+- YubiKey 4 series
+- YubiKey 5 series
+
+NOTE: Nano and USB-C variants of the above are also supported. The pre-YK4
+YubiKey NEO series is **NOT** supported. The blue "Security Key by Yubico" will
+also not work (as it doesn't support PIV).
 
 In practice, any PIV token with an ECDSA P-256 key and certificate in one of the
 20 "retired" slots should work. You can list all age-compatible keys with:
