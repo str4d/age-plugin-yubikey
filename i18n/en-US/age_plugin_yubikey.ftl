@@ -164,8 +164,6 @@ plugin-err-pin-too-short    = PIN was too short.
 plugin-err-pin-too-long     = PIN was too long.
 plugin-err-pin-required     = A PIN is required for {-yubikey} with serial {$yubikey_serial}
 
-plugin-touch-yk = 👆 Please touch the {-yubikey}
-
 ## Errors
 
 err-custom-mgmt-key      = Custom unprotected management keys are not supported.
