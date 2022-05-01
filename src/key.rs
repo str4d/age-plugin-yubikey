@@ -23,6 +23,7 @@ use yubikey::{
 
 use crate::{
     error::Error,
+    fl,
     format::{RecipientLine, STANZA_KEY_LABEL},
     p256::{Recipient, TAG_BYTES},
     util::{otp_serial_prefix, Metadata},
@@ -44,7 +45,14 @@ pub(crate) fn filter_connected(reader: &Reader) -> bool {
             if let Some(pcsc::Error::RemovedCard) =
                 e.source().and_then(|inner| inner.downcast_ref())
             {
-                warn!("Ignoring {}: not connected", reader.name());
+                warn!(
+                    "{}",
+                    i18n_embed_fl::fl!(
+                        crate::LANGUAGE_LOADER,
+                        "warn-yk-not-connected",
+                        yubikey_name = reader.name(),
+                    )
+                );
                 false
             } else {
                 true
@@ -72,9 +80,16 @@ pub(crate) fn wait_for_readers() -> Result<Context, Error> {
 pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
     if !Context::open()?.iter()?.any(is_connected) {
         if let Some(serial) = serial {
-            eprintln!("⏳ Please insert the YubiKey with serial {}.", serial);
+            eprintln!(
+                "{}",
+                i18n_embed_fl::fl!(
+                    crate::LANGUAGE_LOADER,
+                    "open-yk-with-serial",
+                    yubikey_serial = serial.to_string(),
+                )
+            );
         } else {
-            eprintln!("⏳ Please insert the YubiKey.");
+            eprintln!("{}", fl!("open-yk-without-serial"));
         }
     }
     let mut readers = wait_for_readers()?;
@@ -111,32 +126,35 @@ pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
 }
 
 pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
+    const DEFAULT_PIN: &str = "123456";
+    const DEFAULT_PUK: &str = "12345678";
+
     eprintln!();
     let pin = Password::new()
-        .with_prompt(&format!(
-            "Enter PIN for YubiKey with serial {} (default is 123456)",
-            yubikey.serial(),
+        .with_prompt(i18n_embed_fl::fl!(
+            crate::LANGUAGE_LOADER,
+            "mgr-enter-pin",
+            yubikey_serial = yubikey.serial().to_string(),
+            default_pin = DEFAULT_PIN,
         ))
         .interact()?;
     yubikey.verify_pin(pin.as_bytes())?;
 
     // If the user is using the default PIN, help them to change it.
-    if pin == "123456" {
+    if pin == DEFAULT_PIN {
         eprintln!();
-        eprintln!("✨ Your YubiKey is using the default PIN. Let's change it!");
-        eprintln!("✨ We'll also set the PUK equal to the PIN.");
-        eprintln!();
-        eprintln!("🔐 The PIN is up to 8 numbers, letters, or symbols. Not just numbers!");
-        eprintln!(
-            "❌ Your keys will be lost if the PIN and PUK are locked after 3 incorrect tries."
-        );
+        eprintln!("{}", fl!("mgr-change-default-pin"));
         eprintln!();
         let current_puk = Password::new()
-            .with_prompt("Enter current PUK (default is 12345678)")
+            .with_prompt(i18n_embed_fl::fl!(
+                crate::LANGUAGE_LOADER,
+                "mgr-enter-current-puk",
+                default_puk = DEFAULT_PUK,
+            ))
             .interact()?;
         let new_pin = Password::new()
-            .with_prompt("Choose a new PIN/PUK")
-            .with_confirmation("Repeat the PIN/PUK", "PINs don't match")
+            .with_prompt(fl!("mgr-choose-new-pin"))
+            .with_confirmation(fl!("mgr-repeat-new-pin"), fl!("mgr-pin-mismatch"))
             .interact()?;
         if new_pin.len() > 8 {
             return Err(Error::InvalidPinLength);
@@ -156,16 +174,20 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
         // Migrate to a PIN-protected management key.
         let mgm_key = MgmKey::generate();
         eprintln!();
-        eprintln!("✨ Your YubiKey is using the default management key.");
-        eprintln!("✨ We'll migrate it to a PIN-protected management key.");
+        eprintln!("{}", fl!("mgr-changing-mgmt-key"));
         eprint!("... ");
         mgm_key.set_protected(yubikey).map_err(|e| {
-            eprintln!("An error occurred while setting the new management key.");
-            eprintln!("⚠️ SAVE THIS MANAGEMENT KEY - YOU MAY NEED IT TO MANAGE YOUR YubiKey! ⚠️");
-            eprintln!("  {}", hex::encode(mgm_key.as_ref()));
+            eprintln!(
+                "{}",
+                i18n_embed_fl::fl!(
+                    crate::LANGUAGE_LOADER,
+                    "mgr-changing-mgmt-key-error",
+                    management_key = hex::encode(mgm_key.as_ref()),
+                )
+            );
             e
         })?;
-        eprintln!("Success!");
+        eprintln!("{}", fl!("mgr-changing-mgmt-key-success"));
     }
 
     Ok(())
@@ -246,15 +268,20 @@ impl Stub {
             Ok(yk) => yk,
             Err(yubikey::Error::NotFound) => {
                 if callbacks
-                    .message(&format!(
-                        "Please insert YubiKey with serial {}",
-                        self.serial
+                    .message(&i18n_embed_fl::fl!(
+                        crate::LANGUAGE_LOADER,
+                        "plugin-insert-yk",
+                        yubikey_serial = self.serial.to_string(),
                     ))?
                     .is_err()
                 {
                     return Ok(Err(identity::Error::Identity {
                         index: self.identity_index,
-                        message: format!("Could not find YubiKey with serial {}", self.serial),
+                        message: i18n_embed_fl::fl!(
+                            crate::LANGUAGE_LOADER,
+                            "plugin-err-yk-not-found",
+                            yubikey_serial = self.serial.to_string(),
+                        ),
                     }));
                 }
 
@@ -267,9 +294,10 @@ impl Stub {
                         Err(_) => {
                             return Ok(Err(identity::Error::Identity {
                                 index: self.identity_index,
-                                message: format!(
-                                    "Could not open YubiKey with serial {}",
-                                    self.serial
+                                message: i18n_embed_fl::fl!(
+                                    crate::LANGUAGE_LOADER,
+                                    "plugin-err-yk-opening",
+                                    yubikey_serial = self.serial.to_string(),
                                 ),
                             }));
                         }
@@ -279,10 +307,11 @@ impl Stub {
                         Ok(end) if end >= FIFTEEN_SECONDS => {
                             return Ok(Err(identity::Error::Identity {
                                 index: self.identity_index,
-                                message: format!(
-                                "Timed out while waiting for YubiKey with serial {} to be inserted",
-                                self.serial
-                            ),
+                                message: i18n_embed_fl::fl!(
+                                    crate::LANGUAGE_LOADER,
+                                    "plugin-err-yk-timed-out",
+                                    yubikey_serial = self.serial.to_string(),
+                                ),
                             }))
                         }
                         _ => sleep(ONE_SECOND),
@@ -292,7 +321,11 @@ impl Stub {
             Err(_) => {
                 return Ok(Err(identity::Error::Identity {
                     index: self.identity_index,
-                    message: format!("Could not open YubiKey with serial {}", self.serial),
+                    message: i18n_embed_fl::fl!(
+                        crate::LANGUAGE_LOADER,
+                        "plugin-err-yk-opening",
+                        yubikey_serial = self.serial.to_string(),
+                    ),
                 }))
             }
         };
@@ -310,7 +343,7 @@ impl Stub {
             None => {
                 return Ok(Err(identity::Error::Identity {
                     index: self.identity_index,
-                    message: "A YubiKey stub did not match the YubiKey".to_owned(),
+                    message: fl!("plugin-err-yk-stub-mismatch"),
                 }))
             }
         };
@@ -356,9 +389,7 @@ impl Connection {
                     None => {
                         return Ok(Err(identity::Error::Identity {
                             index: self.identity_index,
-                            message:
-                                "Certificate for YubiKey identity contains an invalid PIN policy"
-                                    .to_string(),
+                            message: fl!("plugin-err-yk-invalid-pin-policy"),
                         }))
                     }
                     metadata => metadata,
@@ -371,10 +402,12 @@ impl Connection {
         // The policy requires a PIN, so request it.
         // Note that we can't distinguish between PinPolicy::Once and PinPolicy::Always
         // because this plugin is ephemeral, so we always request the PIN.
-        let mut message = format!(
-            "Enter PIN for YubiKey with serial {}",
-            self.yubikey.serial()
+        let enter_pin_msg = i18n_embed_fl::fl!(
+            crate::LANGUAGE_LOADER,
+            "plugin-enter-pin",
+            yubikey_serial = self.yubikey.serial().to_string(),
         );
+        let mut message = enter_pin_msg.clone();
         let pin = loop {
             message = match callbacks.request_secret(&message)? {
                 Ok(pin) => match pin.expose_secret().len() {
@@ -387,27 +420,19 @@ impl Connection {
                         .expose_secret()
                         .starts_with(&otp_serial_prefix(self.yubikey.serial())) =>
                     {
-                        format!(
-                            "Did you touch the YubiKey by accident? Enter PIN for YubiKey with serial {}",
-                            self.yubikey.serial()
-                        )
+                        format!("{} {}", fl!("plugin-err-accidental-touch"), enter_pin_msg)
                     }
                     // Otherwise, the PIN is either too short or too long.
-                    0..=5 => format!(
-                        "PIN was too short. Enter PIN for YubiKey with serial {}",
-                        self.yubikey.serial()
-                    ),
-                    _ => format!(
-                        "PIN was too long. Enter PIN for YubiKey with serial {}",
-                        self.yubikey.serial()
-                    ),
+                    0..=5 => format!("{} {}", fl!("plugin-err-pin-too-short"), enter_pin_msg),
+                    _ => format!("{} {}", fl!("plugin-err-pin-too-long"), enter_pin_msg),
                 },
                 Err(_) => {
                     return Ok(Err(identity::Error::Identity {
                         index: self.identity_index,
-                        message: format!(
-                            "A PIN is required for YubiKey with serial {}",
-                            self.yubikey.serial()
+                        message: i18n_embed_fl::fl!(
+                            crate::LANGUAGE_LOADER,
+                            "plugin-err-pin-required",
+                            yubikey_serial = self.yubikey.serial().to_string(),
                         ),
                     }))
                 }
@@ -435,11 +460,11 @@ impl Connection {
             self.last_touch,
         ) {
             (Some(TouchPolicy::Always), _) | (Some(TouchPolicy::Cached), None) => {
-                callbacks.message("👆 Please touch the YubiKey")?.unwrap();
+                callbacks.message(&fl!("plugin-touch-yk"))?.unwrap();
                 true
             }
             (Some(TouchPolicy::Cached), Some(last)) if last.elapsed() >= FIFTEEN_SECONDS => {
-                callbacks.message("👆 Please touch the YubiKey")?.unwrap();
+                callbacks.message(&fl!("plugin-touch-yk"))?.unwrap();
                 true
             }
             _ => false,

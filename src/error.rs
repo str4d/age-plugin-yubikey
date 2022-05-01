@@ -1,8 +1,15 @@
+use i18n_embed_fl::fl;
 use std::fmt;
 use std::io;
 use yubikey::{piv::RetiredSlotId, Serial};
 
 use crate::util::slot_to_ui;
+
+macro_rules! wlnfl {
+    ($f:ident, $message_id:literal) => {
+        writeln!($f, "{}", $crate::fl!($message_id))
+    };
+}
 
 pub enum Error {
     CustomManagementKey,
@@ -41,90 +48,136 @@ impl From<yubikey::Error> for Error {
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::CustomManagementKey => {
-                writeln!(f, "Custom unprotected management keys are not supported.")?
-            }
-            Error::InvalidFlagCommand(flag, command) => {
-                writeln!(f, "Flag '{}' cannot be used with '{}'.", flag, command)?
-            }
+            Error::CustomManagementKey => wlnfl!(f, "err-custom-mgmt-key")?,
+            Error::InvalidFlagCommand(flag, command) => writeln!(
+                f,
+                "{}",
+                fl!(
+                    crate::LANGUAGE_LOADER,
+                    "err-invalid-flag-command",
+                    flag = flag.as_str(),
+                    command = command.as_str(),
+                ),
+            )?,
             Error::InvalidFlagTui(flag) => writeln!(
                 f,
-                "Flag '{}' cannot be used with the interactive interface.",
-                flag
+                "{}",
+                fl!(
+                    crate::LANGUAGE_LOADER,
+                    "err-invalid-flag-tui",
+                    flag = flag.as_str(),
+                ),
             )?,
-            Error::InvalidPinLength => writeln!(f, "The PIN needs to be 1-8 characters.")?,
+            Error::InvalidPinLength => wlnfl!(f, "err-invalid-pin-length")?,
             Error::InvalidPinPolicy(s) => writeln!(
                 f,
-                "Invalid PIN policy '{}' (expected [always, once, never]).",
-                s
+                "{}",
+                fl!(
+                    crate::LANGUAGE_LOADER,
+                    "err-invalid-pin-policy",
+                    policy = s.as_str(),
+                    expected = "always, once, never",
+                ),
             )?,
             Error::InvalidSlot(slot) => writeln!(
                 f,
-                "Invalid slot '{}' (expected number between 1 and 20).",
-                slot
+                "{}",
+                fl!(crate::LANGUAGE_LOADER, "err-invalid-slot", slot = slot),
             )?,
             Error::InvalidTouchPolicy(s) => writeln!(
                 f,
-                "Invalid touch policy '{}' (expected [always, cached, never]).",
-                s
+                "{}",
+                fl!(
+                    crate::LANGUAGE_LOADER,
+                    "err-invalid-touch-policy",
+                    policy = s.as_str(),
+                    expected = "always, cached, never",
+                ),
             )?,
-            Error::Io(e) => writeln!(f, "Failed to set up YubiKey: {}", e)?,
-            Error::MultipleCommands => writeln!(
+            Error::Io(e) => writeln!(
                 f,
-                "Only one of --generate, --identity, --list, --list-all can be specified."
+                "{}",
+                fl!(crate::LANGUAGE_LOADER, "err-io", err = e.to_string()),
             )?,
-            Error::MultipleYubiKeys => writeln!(
+            Error::MultipleCommands => wlnfl!(f, "err-multiple-commands")?,
+            Error::MultipleYubiKeys => wlnfl!(f, "err-multiple-yubikeys")?,
+            Error::NoEmptySlots(serial) => writeln!(
                 f,
-                "Multiple YubiKeys are plugged in. Use --serial to select a single YubiKey."
+                "{}",
+                fl!(
+                    crate::LANGUAGE_LOADER,
+                    "err-no-empty-slots",
+                    serial = serial.to_string(),
+                ),
             )?,
-            Error::NoEmptySlots(serial) => {
-                writeln!(f, "YubiKey with serial {} has no empty slots.", serial)?
-            }
-            Error::NoMatchingSerial(serial) => {
-                writeln!(f, "Could not find YubiKey with serial {}.", serial)?
-            }
+            Error::NoMatchingSerial(serial) => writeln!(
+                f,
+                "{}",
+                fl!(
+                    crate::LANGUAGE_LOADER,
+                    "err-no-matching-serial",
+                    serial = serial.to_string(),
+                ),
+            )?,
             Error::SlotHasNoIdentity(slot) => writeln!(
                 f,
-                "Slot {} does not contain an age identity or compatible key.",
-                slot_to_ui(slot)
+                "{}",
+                fl!(
+                    crate::LANGUAGE_LOADER,
+                    "err-slot-has-no-identity",
+                    slot = slot_to_ui(slot),
+                ),
             )?,
             Error::SlotIsNotEmpty(slot) => writeln!(
                 f,
-                "Slot {} is not empty. Use --force to overwrite the slot.",
-                slot_to_ui(slot)
+                "{}",
+                fl!(
+                    crate::LANGUAGE_LOADER,
+                    "err-slot-is-not-empty",
+                    slot = slot_to_ui(slot),
+                ),
             )?,
-            Error::TimedOut => {
-                writeln!(f, "Timed out while waiting for a YubiKey to be inserted.")?
-            }
-            Error::UseListForSingleSlot => {
-                writeln!(f, "Use --list to print the recipient for a single slot.")?
-            }
+            Error::TimedOut => wlnfl!(f, "err-timed-out")?,
+            Error::UseListForSingleSlot => wlnfl!(f, "err-use-list-for-single")?,
             Error::YubiKey(e) => match e {
-                yubikey::Error::NotFound => {
-                    writeln!(f, "Please insert the YubiKey you want to set up")?
-                }
+                yubikey::Error::NotFound => wlnfl!(f, "err-yk-not-found")?,
                 yubikey::Error::WrongPin { tries } => writeln!(
                     f,
-                    "Invalid PIN ({} tries remaining before it is blocked)",
-                    tries
+                    "{}",
+                    fl!(crate::LANGUAGE_LOADER, "err-yk-wrong-pin", tries = tries),
                 )?,
                 e => {
-                    writeln!(f, "Error while communicating with YubiKey: {}", e)?;
+                    writeln!(
+                        f,
+                        "{}",
+                        fl!(
+                            crate::LANGUAGE_LOADER,
+                            "err-yk-general",
+                            err = e.to_string(),
+                        ),
+                    )?;
                     use std::error::Error;
                     if let Some(inner) = e.source() {
-                        writeln!(f, "Cause: {}", inner)?;
+                        writeln!(
+                            f,
+                            "{}",
+                            fl!(
+                                crate::LANGUAGE_LOADER,
+                                "err-yk-general-cause",
+                                inner_err = inner.to_string(),
+                            ),
+                        )?;
                     }
                 }
             },
         }
         writeln!(f)?;
-        writeln!(
-            f,
-            "[ Did this not do what you expected? Could an error be more useful? ]"
-        )?;
+        writeln!(f, "[ {} ]", crate::fl!("err-ux-A"))?;
         write!(
             f,
-            "[ Tell us: https://str4d.xyz/age-plugin-yubikey/report              ]"
+            "[ {}: https://str4d.xyz/age-plugin-yubikey/report {} ]",
+            crate::fl!("err-ux-B"),
+            crate::fl!("err-ux-C")
         )
     }
 }

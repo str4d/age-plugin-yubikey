@@ -7,7 +7,7 @@ use age_plugin::{
 use std::collections::HashMap;
 use std::io;
 
-use crate::{format, key, p256::Recipient, PLUGIN_NAME};
+use crate::{fl, format, key, p256::Recipient, PLUGIN_NAME};
 
 #[derive(Debug, Default)]
 pub(crate) struct RecipientPlugin {
@@ -32,7 +32,7 @@ impl RecipientPluginV1 for RecipientPlugin {
         } else {
             Err(recipient::Error::Recipient {
                 index,
-                message: "Invalid recipient".to_owned(),
+                message: fl!("plugin-err-invalid-recipient"),
             })
         }
     }
@@ -53,7 +53,7 @@ impl RecipientPluginV1 for RecipientPlugin {
         } else {
             Err(recipient::Error::Identity {
                 index,
-                message: "Invalid Yubikey stub".to_owned(),
+                message: fl!("plugin-err-invalid-identity"),
             })
         }
     }
@@ -120,7 +120,7 @@ impl IdentityPluginV1 for IdentityPlugin {
         } else {
             Err(identity::Error::Identity {
                 index,
-                message: "Invalid Yubikey stub".to_owned(),
+                message: fl!("plugin-err-invalid-identity"),
             })
         }
     }
@@ -146,7 +146,7 @@ impl IdentityPluginV1 for IdentityPlugin {
                         res.map_err(|_| identity::Error::Stanza {
                             file_index: file,
                             stanza_index,
-                            message: "Invalid yubikey stanza".to_owned(),
+                            message: fl!("plugin-err-invalid-stanza"),
                         })
                     }),
                     file_keys.contains_key(&file),
@@ -232,7 +232,7 @@ impl IdentityPluginV1 for IdentityPlugin {
                             .error(identity::Error::Stanza {
                                 file_index,
                                 stanza_index,
-                                message: "Failed to decrypt YubiKey stanza".to_owned(),
+                                message: fl!("plugin-err-decryption-failed"),
                             })?
                             .unwrap(),
                     }

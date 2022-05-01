@@ -7,6 +7,7 @@ use yubikey::{
     PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
+use crate::fl;
 use crate::{error::Error, key::Stub, p256::Recipient, BINARY_NAME, USABLE_SLOTS};
 
 pub(crate) const POLICY_EXTENSION_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 41482, 3, 8];
@@ -42,23 +43,21 @@ pub(crate) fn touch_policy_from_string(s: String) -> Result<TouchPolicy, Error> 
     }
 }
 
-pub(crate) fn pin_policy_to_str(policy: Option<PinPolicy>) -> &'static str {
+pub(crate) fn pin_policy_to_str(policy: Option<PinPolicy>) -> String {
     match policy {
-        Some(PinPolicy::Always) => "Always (A PIN is required for every decryption, if set)",
-        Some(PinPolicy::Once) => "Once   (A PIN is required once per session, if set)",
-        Some(PinPolicy::Never) => "Never  (A PIN is NOT required to decrypt)",
-        _ => "Unknown",
+        Some(PinPolicy::Always) => fl!("pin-policy-always"),
+        Some(PinPolicy::Once) => fl!("pin-policy-once"),
+        Some(PinPolicy::Never) => fl!("pin-policy-never"),
+        _ => fl!("unknown-policy"),
     }
 }
 
-pub(crate) fn touch_policy_to_str(policy: Option<TouchPolicy>) -> &'static str {
+pub(crate) fn touch_policy_to_str(policy: Option<TouchPolicy>) -> String {
     match policy {
-        Some(TouchPolicy::Always) => "Always (A physical touch is required for every decryption)",
-        Some(TouchPolicy::Cached) => {
-            "Cached (A physical touch is required for decryption, and is cached for 15 seconds)"
-        }
-        Some(TouchPolicy::Never) => "Never  (A physical touch is NOT required to decrypt)",
-        _ => "Unknown",
+        Some(TouchPolicy::Always) => fl!("touch-policy-always"),
+        Some(TouchPolicy::Cached) => fl!("touch-policy-cached"),
+        Some(TouchPolicy::Never) => fl!("touch-policy-never"),
+        _ => fl!("unknown-policy"),
     }
 }
 
@@ -178,19 +177,19 @@ impl Metadata {
 
 impl fmt::Display for Metadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(
-            f,
-            "#       Serial: {}, Slot: {}",
-            self.serial,
-            slot_to_ui(&self.slot)
-        )?;
-        writeln!(f, "#         Name: {}", self.name)?;
-        writeln!(f, "#      Created: {}", self.created)?;
-        writeln!(f, "#   PIN policy: {}", pin_policy_to_str(self.pin_policy))?;
         write!(
             f,
-            "# Touch policy: {}",
-            touch_policy_to_str(self.touch_policy)
+            "{}",
+            i18n_embed_fl::fl!(
+                crate::LANGUAGE_LOADER,
+                "yubikey-metadata",
+                serial = self.serial.to_string(),
+                slot = slot_to_ui(&self.slot),
+                name = self.name.as_str(),
+                created = self.created.as_str(),
+                pin_policy = pin_policy_to_str(self.pin_policy),
+                touch_policy = touch_policy_to_str(self.touch_policy),
+            )
         )
     }
 }
@@ -198,10 +197,24 @@ impl fmt::Display for Metadata {
 pub(crate) fn print_identity(stub: Stub, recipient: Recipient, metadata: Metadata) {
     let recipient = recipient.to_string();
     if !console::user_attended() {
-        eprintln!("Recipient: {}", recipient);
+        eprintln!(
+            "{}",
+            i18n_embed_fl::fl!(
+                crate::LANGUAGE_LOADER,
+                "print-recipient",
+                recipient = recipient.as_str(),
+            )
+        );
     }
 
-    println!("{}", metadata);
-    println!("#    Recipient: {}", recipient);
-    println!("{}", stub.to_string());
+    println!(
+        "{}",
+        i18n_embed_fl::fl!(
+            crate::LANGUAGE_LOADER,
+            "yubikey-identity",
+            yubikey_metadata = metadata.to_string(),
+            recipient = recipient,
+            identity = stub.to_string(),
+        )
+    );
 }

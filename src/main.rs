@@ -6,6 +6,12 @@ use std::io::{self, Write};
 use age_plugin::run_state_machine;
 use dialoguer::{Confirm, Input, Select};
 use gumdrop::Options;
+use i18n_embed::{
+    fluent::{fluent_language_loader, FluentLanguageLoader},
+    DesktopLanguageRequester,
+};
+use lazy_static::lazy_static;
+use rust_embed::RustEmbed;
 use yubikey::{
     certificate::PublicKeyInfo,
     piv::{RetiredSlotId, SlotId},
@@ -51,6 +57,23 @@ const USABLE_SLOTS: [RetiredSlotId; 20] = [
     RetiredSlotId::R19,
     RetiredSlotId::R20,
 ];
+
+#[derive(RustEmbed)]
+#[folder = "i18n"]
+struct Translations;
+
+const TRANSLATIONS: Translations = Translations {};
+
+lazy_static! {
+    static ref LANGUAGE_LOADER: FluentLanguageLoader = fluent_language_loader!();
+}
+
+#[macro_export]
+macro_rules! fl {
+    ($message_id:literal) => {{
+        i18n_embed_fl::fl!($crate::LANGUAGE_LOADER, $message_id)
+    }};
+}
 
 #[derive(Debug, Options)]
 struct PluginOptions {
@@ -246,8 +269,13 @@ fn print_multiple(
     }
     if printed > 1 {
         eprintln!(
-            "Generated {} for {} slots. If you intended to select a slot, use --slot.",
-            kind, printed,
+            "{}",
+            i18n_embed_fl::fl!(
+                LANGUAGE_LOADER,
+                "printed-multiple",
+                kind = kind,
+                count = printed,
+            )
         );
     }
 
@@ -274,7 +302,12 @@ fn identity(flags: PluginFlags) -> Result<(), Error> {
             "--identity".into(),
         ));
     }
-    print_details("identities", flags, false, util::print_identity)
+    print_details(
+        &fl!("printed-kind-identities"),
+        flags,
+        false,
+        util::print_identity,
+    )
 }
 
 fn list(flags: PluginFlags, all: bool) -> Result<(), Error> {
@@ -288,10 +321,15 @@ fn list(flags: PluginFlags, all: bool) -> Result<(), Error> {
         ));
     }
 
-    print_details("recipients", flags, all, |_, recipient, metadata| {
-        println!("{}", metadata);
-        println!("{}", recipient.to_string());
-    })
+    print_details(
+        &fl!("printed-kind-recipients"),
+        flags,
+        all,
+        |_, recipient, metadata| {
+            println!("{}", metadata);
+            println!("{}", recipient.to_string());
+        },
+    )
 }
 
 fn main() -> Result<(), Error> {
@@ -300,6 +338,12 @@ fn main() -> Result<(), Error> {
         .filter_level(log::LevelFilter::Off)
         .parse_default_env()
         .init();
+
+    let requested_languages = DesktopLanguageRequester::requested_languages();
+    i18n_embed::select(&*LANGUAGE_LOADER, &TRANSLATIONS, &requested_languages).unwrap();
+    // Unfortunately the common Windows terminals don't support Unicode Directionality
+    // Isolation Marks, so we disable them for now.
+    LANGUAGE_LOADER.set_use_isolating(false);
 
     let opts = PluginOptions::parse_args_default_or_exit();
 
@@ -336,23 +380,18 @@ fn main() -> Result<(), Error> {
         }
         let flags: PluginFlags = opts.try_into()?;
 
-        eprintln!("✨ Let's get your YubiKey set up for age! ✨");
-        eprintln!();
-        eprintln!("This tool can create a new age identity in a free slot of your YubiKey.");
-        eprintln!("It will generate an identity file that you can use with an age client,");
-        eprintln!("along with the corresponding recipient. You can also do this directly");
-        eprintln!("with:");
-        eprintln!("    age-plugin-yubikey --generate");
-        eprintln!();
-        eprintln!("If you are already using a YubiKey with age, you can select an existing");
-        eprintln!("slot to recreate its corresponding identity file and recipient.");
-        eprintln!();
-        eprintln!("When asked below to select an option, use the up/down arrow keys to");
-        eprintln!("make your choice, or press [Esc] or [q] to quit.");
+        eprintln!(
+            "{}",
+            i18n_embed_fl::fl!(
+                LANGUAGE_LOADER,
+                "cli-setup-intro",
+                generate_usage = "age-plugin-yubikey --generate",
+            )
+        );
         eprintln!();
 
         if !Context::open()?.iter()?.any(key::is_connected) {
-            eprintln!("⏳ Please insert the YubiKey you want to set up.");
+            eprintln!("{}", fl!("cli-setup-insert-yk"));
         };
         let mut readers = key::wait_for_readers()?;
 
@@ -362,13 +401,18 @@ fn main() -> Result<(), Error> {
         let reader_names = readers_list
             .iter()
             .map(|reader| {
-                reader
-                    .open()
-                    .map(|yk| format!("{} (Serial: {})", reader.name(), yk.serial()))
+                reader.open().map(|yk| {
+                    i18n_embed_fl::fl!(
+                        LANGUAGE_LOADER,
+                        "cli-setup-yk-name",
+                        yubikey_name = reader.name(),
+                        yubikey_serial = yk.serial().to_string(),
+                    )
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
         let mut yubikey = match Select::new()
-            .with_prompt("🔑 Select a YubiKey")
+            .with_prompt(fl!("cli-setup-select-yk"))
             .items(&reader_names)
             .default(0)
             .interact_opt()?
@@ -411,9 +455,20 @@ fn main() -> Result<(), Error> {
                 let i = i + 1;
 
                 match occupied {
-                    Some(Some(name)) => format!("Slot {} ({})", i, name),
-                    Some(None) => format!("Slot {} (Unusable)", i),
-                    None => format!("Slot {} (Empty)", i),
+                    Some(Some(name)) => i18n_embed_fl::fl!(
+                        LANGUAGE_LOADER,
+                        "cli-setup-slot-usable",
+                        slot_index = i,
+                        slot_name = name.as_str(),
+                    ),
+                    Some(None) => i18n_embed_fl::fl!(
+                        LANGUAGE_LOADER,
+                        "cli-setup-slot-unusable",
+                        slot_index = i,
+                    ),
+                    None => {
+                        i18n_embed_fl::fl!(LANGUAGE_LOADER, "cli-setup-slot-empty", slot_index = i)
+                    }
                 }
             })
             .collect();
@@ -421,7 +476,7 @@ fn main() -> Result<(), Error> {
         let ((stub, recipient, metadata), is_new) = {
             let (slot_index, slot) = loop {
                 match Select::new()
-                    .with_prompt("🕳️  Select a slot for your age identity")
+                    .with_prompt(fl!("cli-setup-select-slot"))
                     .items(&slots)
                     .default(0)
                     .interact_opt()?
@@ -445,7 +500,11 @@ fn main() -> Result<(), Error> {
                 };
 
                 if Confirm::new()
-                    .with_prompt(&format!("Use existing identity in slot {}?", slot_index))
+                    .with_prompt(i18n_embed_fl::fl!(
+                        LANGUAGE_LOADER,
+                        "cli-setup-use-existing",
+                        slot_index = slot_index,
+                    ))
                     .interact()?
                 {
                     let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
@@ -461,18 +520,19 @@ fn main() -> Result<(), Error> {
             } else {
                 let name = Input::<String>::new()
                     .with_prompt(format!(
-                        "📛 Name this identity [{}]",
+                        "{} [{}]",
+                        fl!("cli-setup-name-identity"),
                         flags.name.as_deref().unwrap_or("age identity TAG_HEX")
                     ))
                     .allow_empty(true)
                     .interact_text()?;
 
                 let pin_policy = match Select::new()
-                    .with_prompt("🔤 Select a PIN policy")
+                    .with_prompt(fl!("cli-setup-select-pin-policy"))
                     .items(&[
-                        "Always (A PIN is required for every decryption, if set)",
-                        "Once   (A PIN is required once per session, if set)",
-                        "Never  (A PIN is NOT required to decrypt)",
+                        fl!("pin-policy-always"),
+                        fl!("pin-policy-once"),
+                        fl!("pin-policy-never"),
                     ])
                     .default(
                         [PinPolicy::Always, PinPolicy::Once, PinPolicy::Never]
@@ -492,30 +552,35 @@ fn main() -> Result<(), Error> {
                 };
 
                 let touch_policy = match Select::new()
-                        .with_prompt("👆 Select a touch policy")
-                        .items(&[
-                            "Always (A physical touch is required for every decryption)",
-                            "Cached (A physical touch is required for decryption, and is cached for 15 seconds)",
-                            "Never  (A physical touch is NOT required to decrypt)",
-                        ])
-                        .default(
-                            [TouchPolicy::Always, TouchPolicy::Cached, TouchPolicy::Never]
-                                .iter()
-                                .position(|p| p == &flags
-                                    .touch_policy.unwrap_or(builder::DEFAULT_TOUCH_POLICY))
-                                .unwrap(),
-                        )
-                        .interact_opt()?
-                    {
-                        Some(0) => TouchPolicy::Always,
-                        Some(1) => TouchPolicy::Cached,
-                        Some(2) => TouchPolicy::Never,
-                        Some(_) => unreachable!(),
-                        None => return Ok(()),
-                    };
+                    .with_prompt(fl!("cli-setup-select-touch-policy"))
+                    .items(&[
+                        fl!("touch-policy-always"),
+                        fl!("touch-policy-cached"),
+                        fl!("touch-policy-never"),
+                    ])
+                    .default(
+                        [TouchPolicy::Always, TouchPolicy::Cached, TouchPolicy::Never]
+                            .iter()
+                            .position(|p| {
+                                p == &flags.touch_policy.unwrap_or(builder::DEFAULT_TOUCH_POLICY)
+                            })
+                            .unwrap(),
+                    )
+                    .interact_opt()?
+                {
+                    Some(0) => TouchPolicy::Always,
+                    Some(1) => TouchPolicy::Cached,
+                    Some(2) => TouchPolicy::Never,
+                    Some(_) => unreachable!(),
+                    None => return Ok(()),
+                };
 
                 if Confirm::new()
-                    .with_prompt(&format!("Generate new identity in slot {}?", slot_index))
+                    .with_prompt(i18n_embed_fl::fl!(
+                        LANGUAGE_LOADER,
+                        "cli-setup-generate-new",
+                        slot_index = slot_index,
+                    ))
                     .interact()?
                 {
                     eprintln!();
@@ -538,7 +603,7 @@ fn main() -> Result<(), Error> {
 
         eprintln!();
         let file_name = Input::<String>::new()
-            .with_prompt("📝 File name to write this identity to")
+            .with_prompt(fl!("cli-setup-identity-file-name"))
             .default(format!(
                 "age-yubikey-identity-{}.txt",
                 hex::encode(stub.tag)
@@ -553,7 +618,7 @@ fn main() -> Result<(), Error> {
             Ok(file) => file,
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
                 if Confirm::new()
-                    .with_prompt("File exists. Overwrite it?")
+                    .with_prompt(fl!("cli-setup-identity-file-exists"))
                     .interact()?
                 {
                     File::create(&file_name)?
@@ -564,54 +629,56 @@ fn main() -> Result<(), Error> {
             Err(e) => return Err(e.into()),
         };
 
-        writeln!(file, "{}", metadata)?;
-        writeln!(file, "#    Recipient: {}", recipient)?;
-        writeln!(file, "{}", stub.to_string())?;
+        writeln!(
+            file,
+            "{}",
+            i18n_embed_fl::fl!(
+                LANGUAGE_LOADER,
+                "yubikey-identity",
+                yubikey_metadata = metadata.to_string(),
+                recipient = recipient.to_string(),
+                identity = stub.to_string(),
+            )
+        )?;
         file.sync_data()?;
 
         // If `rage` binary is installed, use it in examples. Otherwise default to `age`.
         let age_binary = which::which("rage").map(|_| "rage").unwrap_or("age");
 
-        eprintln!();
-        eprintln!("✅ Done! This YubiKey identity is ready to go.");
-        eprintln!();
-        if is_new {
-            eprintln!("🔑 Here's your shiny new YubiKey recipient:");
-        } else {
-            eprintln!("🔑 Here's the corresponding YubiKey recipient:");
-        }
-        eprintln!("  {}", recipient);
-        eprintln!();
-        eprintln!("Here are some example things you can do with it:");
-        eprintln!();
-        eprintln!("- Encrypt a file to this identity:");
-        eprintln!(
-            "  $ cat foo.txt | {} -r {} -o foo.txt.age",
+        let encrypt_usage = format!(
+            "$ cat foo.txt | {} -r {} -o foo.txt.age",
             age_binary, recipient
         );
-        eprintln!();
-        eprintln!("- Decrypt a file with this identity:");
-        eprintln!(
-            "  $ cat foo.txt.age | {} -d -i {} > foo.txt",
+        let decrypt_usage = format!(
+            "$ cat foo.txt.age | {} -d -i {} > foo.txt",
             age_binary, file_name
         );
-        eprintln!();
-        eprintln!("- Recreate the identity file:");
-        eprintln!(
-            "  $ age-plugin-yubikey -i --serial {} --slot {} > {}",
+        let identity_usage = format!(
+            "$ age-plugin-yubikey -i --serial {} --slot {} > {}",
             stub.serial,
             util::slot_to_ui(&stub.slot),
             file_name,
         );
-        eprintln!();
-        eprintln!("- Recreate the recipient:");
-        eprintln!(
-            "  $ age-plugin-yubikey -l --serial {} --slot {}",
+        let recipient_usage = format!(
+            "$ age-plugin-yubikey -l --serial {} --slot {}",
             stub.serial,
             util::slot_to_ui(&stub.slot),
         );
+
         eprintln!();
-        eprintln!("💭 Remember: everything breaks, have a backup plan for when this YubiKey does.");
+        eprintln!(
+            "{}",
+            i18n_embed_fl::fl!(
+                LANGUAGE_LOADER,
+                "cli-setup-finished",
+                is_new = if is_new { "true" } else { "false" },
+                recipient = recipient.to_string(),
+                encrypt_usage = encrypt_usage,
+                decrypt_usage = decrypt_usage,
+                identity_usage = identity_usage,
+                recipient_usage = recipient_usage,
+            )
+        );
 
         Ok(())
     }
