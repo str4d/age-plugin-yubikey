@@ -50,3 +50,7 @@ rust-embed = "6"
 [dev-dependencies]
 flate2 = "1"
 man = "0.3"
+
+[patch.crates-io]
+age-core = { git = "https://github.com/str4d/rage.git", rev = "fdb518c6d802a3618b47d959d56af6e60c668627" }
+age-plugin = { git = "https://github.com/str4d/rage.git", rev = "fdb518c6d802a3618b47d959d56af6e60c668627" }
