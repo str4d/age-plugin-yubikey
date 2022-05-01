@@ -447,26 +447,16 @@ impl Connection {
         Ok(Ok(()))
     }
 
-    pub(crate) fn unwrap_file_key<E>(
-        &mut self,
-        line: &RecipientLine,
-        callbacks: &mut dyn Callbacks<E>,
-    ) -> io::Result<Result<FileKey, ()>> {
+    pub(crate) fn unwrap_file_key(&mut self, line: &RecipientLine) -> Result<FileKey, ()> {
         assert_eq!(self.tag, line.tag);
 
-        // If the touch policy requires it, request a touch.
-        let requested_touch = match (
+        // Check if the touch policy requires a touch.
+        let needs_touch = match (
             self.cached_metadata.as_ref().and_then(|m| m.touch_policy),
             self.last_touch,
         ) {
-            (Some(TouchPolicy::Always), _) | (Some(TouchPolicy::Cached), None) => {
-                callbacks.message(&fl!("plugin-touch-yk"))?.unwrap();
-                true
-            }
-            (Some(TouchPolicy::Cached), Some(last)) if last.elapsed() >= FIFTEEN_SECONDS => {
-                callbacks.message(&fl!("plugin-touch-yk"))?.unwrap();
-                true
-            }
+            (Some(TouchPolicy::Always), _) | (Some(TouchPolicy::Cached), None) => true,
+            (Some(TouchPolicy::Cached), Some(last)) if last.elapsed() >= FIFTEEN_SECONDS => true,
             _ => false,
         };
 
@@ -479,11 +469,11 @@ impl Connection {
             SlotId::Retired(self.slot),
         ) {
             Ok(res) => res,
-            Err(_) => return Ok(Err(())),
+            Err(_) => return Err(()),
         };
 
         // If we requested a touch and reached here, the user touched the YubiKey.
-        if requested_touch {
+        if needs_touch {
             if let Some(TouchPolicy::Cached) =
                 self.cached_metadata.as_ref().and_then(|m| m.touch_policy)
             {
@@ -500,10 +490,10 @@ impl Connection {
         // A failure to decrypt is fatal, because we assume that we won't
         // encounter 32-bit collisions on the key tag embedded in the header.
         match aead_decrypt(&enc_key, FILE_KEY_BYTES, &line.encrypted_file_key) {
-            Ok(pt) => Ok(Ok(TryInto::<[u8; FILE_KEY_BYTES]>::try_into(&pt[..])
+            Ok(pt) => Ok(TryInto::<[u8; FILE_KEY_BYTES]>::try_into(&pt[..])
                 .unwrap()
-                .into())),
-            Err(_) => Ok(Err(())),
+                .into()),
+            Err(_) => Err(()),
         }
     }
 }

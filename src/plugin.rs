@@ -222,7 +222,7 @@ impl IdentityPluginV1 for IdentityPlugin {
                 }
 
                 for (stanza_index, line) in stanzas.iter().enumerate() {
-                    match conn.unwrap_file_key(line, &mut callbacks)? {
+                    match conn.unwrap_file_key(line) {
                         Ok(file_key) => {
                             // We've managed to decrypt this file!
                             file_keys.entry(file_index).or_insert(Ok(file_key));
