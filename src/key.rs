@@ -238,6 +238,9 @@ impl Stub {
     }
 
     pub(crate) fn from_bytes(bytes: &[u8], identity_index: usize) -> Option<Self> {
+        if bytes.len() < 9 {
+            return None;
+        }
         let serial = Serial::from(u32::from_le_bytes(bytes[0..4].try_into().unwrap()));
         let slot: RetiredSlotId = bytes[4].try_into().ok()?;
         Some(Stub {
@@ -572,6 +575,8 @@ mod tests {
         };
 
         let encoded = stub.to_bytes();
+        assert_eq!(Stub::from_bytes(&[], 0), None);
         assert_eq!(Stub::from_bytes(&encoded, 0), Some(stub));
+        assert_eq!(Stub::from_bytes(&encoded[..encoded.len() - 1], 0), None);
     }
 }
