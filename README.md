@@ -4,9 +4,6 @@
 like [`age`](https://age-encryption.org) and [`rage`](https://str4d.xyz/rage),
 which enables files to be encrypted to age identities stored on YubiKeys.
 
-This plugin is in **BETA**; we strongly recommend using this with a new YubiKey,
-or one that you do not care about.
-
 ## Installation
 
 On Windows, Linux, and macOS, you can use the

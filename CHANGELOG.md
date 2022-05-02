@@ -4,11 +4,26 @@ All notable changes to this crate will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Rust's notion of
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). All versions prior
-to 1.0.0 are beta releases.
+to 0.3.0 are beta releases.
 
 ## [Unreleased]
+
+## [0.3.0] - 2022-05-02
+First non-beta release!
+
 ### Changed
 - MSRV is now 1.56.0.
+- During decryption, when asked to insert a YubiKey, you can now choose to skip
+  it, allowing the client to move on to the next identity instead of returning
+  an error.
+- Certain kinds of PIN invalidity will now cause the plugin to re-request the
+  PIN instead of aborting: if the PIN is too short or too long, or if the user
+  touched the YubiKey early and "typed" an OTP.
+
+### Fixed
+- The "default" identity (provided by clients that invoke `age-plugin-yubikey`
+  using `-j yubikey`) previously caused a panic. It is now correctly treated as
+  an invalid identity (because this plugin does not support default identities).
 
 ## [0.2.0] - 2021-11-22
 ### Fixed
