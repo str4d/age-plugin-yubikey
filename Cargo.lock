@@ -19,8 +19,9 @@ dependencies = [
 
 [[package]]
 name = "age-core"
-version = "0.7.1"
-source = "git+https://github.com/str4d/rage.git?rev=fdb518c6d802a3618b47d959d56af6e60c668627#fdb518c6d802a3618b47d959d56af6e60c668627"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00a5c8d8a33abc74ad393896a6305351dd159d0e184788f4729e3c80e397fa45"
 dependencies = [
  "base64",
  "chacha20poly1305",
@@ -36,8 +37,9 @@ dependencies = [
 
 [[package]]
 name = "age-plugin"
-version = "0.2.1"
-source = "git+https://github.com/str4d/rage.git?rev=fdb518c6d802a3618b47d959d56af6e60c668627#fdb518c6d802a3618b47d959d56af6e60c668627"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad6dc325516aa4b1e06a858dcfa9c5c962d02fb801331f23214d21abd9e2346b"
 dependencies = [
  "age-core",
  "base64",
