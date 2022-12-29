@@ -18,6 +18,15 @@ cargo install age-plugin-yubikey
 
 Help from new packagers is very welcome.
 
+### Linux, BSD, etc.
+
+On non-Windows, non-macOS systems, you need to ensure that the `pcscd` service
+is installed and running. On Debian or Ubuntu, you can do this with:
+
+```
+$ sudo apt-get install pcscd
+```
+
 ### Windows Subsystem for Linux (WSL)
 
 WSL does not currently provide native support for USB devices. However, Windows
