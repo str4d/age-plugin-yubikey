@@ -141,6 +141,35 @@ impl fmt::Debug for Error {
             Error::UseListForSingleSlot => wlnfl!(f, "err-use-list-for-single")?,
             Error::YubiKey(e) => match e {
                 yubikey::Error::NotFound => wlnfl!(f, "err-yk-not-found")?,
+                yubikey::Error::PcscError {
+                    inner: Some(pcsc::Error::NoService),
+                } => {
+                    if cfg!(windows) {
+                        wlnfl!(f, "err-yk-no-service-win")?;
+                        let url = "https://learn.microsoft.com/en-us/windows/security/identity-protection/smart-cards/smart-card-debugging-information#smart-card-service";
+                        writeln!(
+                            f,
+                            "{}",
+                            fl!(crate::LANGUAGE_LOADER, "rec-yk-no-service-win", url = url),
+                        )?;
+                    } else if cfg!(target_os = "macos") {
+                        wlnfl!(f, "err-yk-no-service-macos")?;
+                        let url = "https://apple.stackexchange.com/a/438198";
+                        writeln!(
+                            f,
+                            "{}",
+                            fl!(crate::LANGUAGE_LOADER, "rec-yk-no-service-macos", url = url),
+                        )?;
+                    } else {
+                        wlnfl!(f, "err-yk-no-service-pcscd")?;
+                        let apt = "sudo apt-get install pcscd";
+                        writeln!(
+                            f,
+                            "{}",
+                            fl!(crate::LANGUAGE_LOADER, "rec-yk-no-service-pcscd", apt = apt),
+                        )?;
+                    }
+                }
                 yubikey::Error::WrongPin { tries } => writeln!(
                     f,
                     "{}",

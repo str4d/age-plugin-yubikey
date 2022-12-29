@@ -12,6 +12,7 @@
 -yubikey = YubiKey
 -yubikeys = YubiKeys
 -age-plugin-yubikey = age-plugin-yubikey
+-pcscd = pcscd
 
 ## CLI commands and flags
 
@@ -185,6 +186,22 @@ err-slot-has-no-identity = Slot {$slot} does not contain an {-age} identity or c
 err-slot-is-not-empty    = Slot {$slot} is not empty. Use {-flag-force} to overwrite the slot.
 err-timed-out            = Timed out while waiting for a {-yubikey} to be inserted.
 err-use-list-for-single  = Use {-cmd-list} to print the recipient for a single slot.
+
+err-yk-no-service-macos = The Crypto Token Kit service is not running.
+rec-yk-no-service-macos =
+    You may need to restart it. See this Stack Exchange answer for more help:
+    {"  "}{$url}
+
+err-yk-no-service-pcscd = {-pcscd} is not running.
+rec-yk-no-service-pcscd =
+    If you are on Debian or Ubuntu, you can install it with:
+    {"  "}{$apt}
+
+err-yk-no-service-win = The Smart Cards for Windows service is not running.
+rec-yk-no-service-win =
+    See this troubleshooting guide for more help:
+    {"  "}{$url}
+
 err-yk-not-found         = Please insert the {-yubikey} you want to set up
 err-yk-wrong-pin         = Invalid PIN ({$tries} tries remaining before it is blocked)
 err-yk-general           = Error while communicating with {-yubikey}: {$err}
