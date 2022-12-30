@@ -286,7 +286,7 @@ fn list(flags: PluginFlags, all: bool) -> Result<(), Error> {
         all,
         |_, recipient, metadata| {
             println!("{}", metadata);
-            println!("{}", recipient.to_string());
+            println!("{}", recipient);
         },
     )
 }
