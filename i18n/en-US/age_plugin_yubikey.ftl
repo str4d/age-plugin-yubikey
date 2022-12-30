@@ -170,7 +170,7 @@ plugin-err-pin-required     = A PIN is required for {-yubikey} with serial {$yub
 
 ## Errors
 
-err-custom-mgmt-key = Custom unprotected management keys are not supported.
+err-custom-mgmt-key = Custom unprotected non-TDES management keys are not supported.
 rec-custom-mgmt-key =
     You can use the {-yubikey} Manager CLI to change to a protected management key:
     {"  "}{$cmd}
