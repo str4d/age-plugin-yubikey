@@ -8,7 +8,7 @@ use age_core::{
 use age_plugin::{identity, Callbacks};
 use bech32::{ToBase32, Variant};
 use dialoguer::Password;
-use log::warn;
+use log::{debug, warn};
 use std::fmt;
 use std::io;
 use std::iter;
@@ -77,6 +77,71 @@ pub(crate) fn wait_for_readers() -> Result<Context, Error> {
     }
 }
 
+/// Stops `scdaemon` if it is running.
+///
+/// Returns `true` if `scdaemon` was running and was successfully interrupted (or killed
+/// if the platform doesn't support interrupts).
+fn stop_scdaemon() -> bool {
+    debug!("Sharing violation encountered, looking for scdaemon processes to stop");
+
+    use sysinfo::{
+        Process, ProcessExt, ProcessRefreshKind, RefreshKind, Signal, System, SystemExt,
+    };
+
+    let mut interrupted = false;
+
+    let sys =
+        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
+
+    for process in sys
+        .processes()
+        .values()
+        .filter(|val: &&Process| ["scdaemon", "scdaemon.exe"].contains(&val.name()))
+    {
+        if process
+            .kill_with(Signal::Interrupt)
+            .unwrap_or_else(|| process.kill())
+        {
+            debug!("Stopped scdaemon (PID {})", process.pid());
+            interrupted = true;
+        }
+    }
+
+    // If we did interrupt `scdaemon`, pause briefly to allow it to exit.
+    if interrupted {
+        sleep(Duration::from_millis(100));
+    }
+
+    interrupted
+}
+
+fn open_sesame(
+    op: impl Fn() -> Result<YubiKey, yubikey::Error>,
+) -> Result<YubiKey, yubikey::Error> {
+    op().or_else(|e| match e {
+        yubikey::Error::PcscError {
+            inner: Some(pcsc::Error::SharingViolation),
+        } if stop_scdaemon() => op(),
+        _ => Err(e),
+    })
+}
+
+/// Opens a connection to this reader, returning a `YubiKey` if successful.
+///
+/// This is equivalent to [`Reader::open`], but additionally handles the presence of
+/// `scdaemon` (which can indefinitely hold exclusive access to a YubiKey).
+pub(crate) fn open_connection(reader: &Reader) -> Result<YubiKey, yubikey::Error> {
+    open_sesame(|| reader.open())
+}
+
+/// Opens a YubiKey with a specific serial number.
+///
+/// This is equivalent to [`YubiKey::open_by_serial`], but additionally handles the
+/// presence of `scdaemon` (which can indefinitely hold exclusive access to a YubiKey).
+fn open_by_serial(serial: Serial) -> Result<YubiKey, yubikey::Error> {
+    open_sesame(|| YubiKey::open_by_serial(serial))
+}
+
 pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
     if !Context::open()?.iter()?.any(is_connected) {
         if let Some(serial) = serial {
@@ -99,9 +164,9 @@ pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
     // connected, an error is returned.
     let yubikey = match (readers_iter.next(), readers_iter.next(), serial) {
         (None, _, _) => unreachable!(),
-        (Some(reader), None, None) => reader.open()?,
+        (Some(reader), None, None) => open_connection(&reader)?,
         (Some(reader), None, Some(serial)) => {
-            let yubikey = reader.open()?;
+            let yubikey = open_connection(&reader)?;
             if yubikey.serial() != serial {
                 return Err(Error::NoMatchingSerial(serial));
             }
@@ -112,12 +177,12 @@ pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
                 .chain(Some(a))
                 .chain(Some(b))
                 .chain(readers_iter)
-                .find(|reader| match reader.open() {
+                .find(|reader| match open_connection(reader) {
                     Ok(yk) => yk.serial() == serial,
                     _ => false,
                 })
                 .ok_or(Error::NoMatchingSerial(serial))?;
-            reader.open()?
+            open_connection(&reader)?
         }
         (Some(_), Some(_), None) => return Err(Error::MultipleYubiKeys),
     };
@@ -272,7 +337,7 @@ impl Stub {
         &self,
         callbacks: &mut dyn Callbacks<E>,
     ) -> io::Result<Result<Option<Connection>, identity::Error>> {
-        let mut yubikey = match YubiKey::open_by_serial(self.serial) {
+        let mut yubikey = match open_by_serial(self.serial) {
             Ok(yk) => yk,
             Err(yubikey::Error::NotFound) => {
                 let mut message = i18n_embed_fl::fl!(
@@ -294,7 +359,7 @@ impl Stub {
                         // User told us to skip this key.
                         Ok(false) => return Ok(Ok(None)),
                         // User said they plugged it in; try it.
-                        Ok(true) => match YubiKey::open_by_serial(self.serial) {
+                        Ok(true) => match open_by_serial(self.serial) {
                             Ok(yubikey) => break Some(yubikey),
                             Err(yubikey::Error::NotFound) => (),
                             Err(_) => {
@@ -348,7 +413,7 @@ impl Stub {
                     // Start a 15-second timer waiting for the YubiKey to be inserted
                     let start = SystemTime::now();
                     loop {
-                        match YubiKey::open_by_serial(self.serial) {
+                        match open_by_serial(self.serial) {
                             Ok(yubikey) => break yubikey,
                             Err(yubikey::Error::NotFound) => (),
                             Err(_) => {
