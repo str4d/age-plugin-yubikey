@@ -7,12 +7,16 @@ and this project adheres to Rust's notion of
 to 0.3.0 are beta releases.
 
 ## [Unreleased]
+
+## [0.3.1] - 2022-12-30
 ### Changed
 - If a "sharing violation" error is encountered while opening a connection to a
   YubiKey, and `scdaemon` is running (which can hold exclusive access to a
   YubiKey indefinitely), `age-plugin-yubikey` now attempts to stop `scdaemon` by
   interrupting it (or killing it on Windows), and then tries again to open the
   connection.
+- Several error messages were enhanced with guidance on how to resolve their
+  respective issue.
 
 ## [0.3.0] - 2022-05-02
 First non-beta release!
