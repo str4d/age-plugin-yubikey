@@ -24,7 +24,7 @@ assets = [
 [dependencies]
 age-core = "0.9"
 age-plugin = "0.4"
-base64 = "0.13"
+base64 = "0.20"
 bech32 = "0.9"
 console = { version = "0.15", default-features = false }
 dialoguer = { version = "0.9", default-features = false, features = ["password"] }

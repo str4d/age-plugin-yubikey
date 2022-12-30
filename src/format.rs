@@ -18,6 +18,14 @@ const TAG_BYTES: usize = 4;
 const EPK_BYTES: usize = 33;
 const ENCRYPTED_FILE_KEY_BYTES: usize = 32;
 
+const STANDARD_NO_PAD: &base64::engine::fast_portable::FastPortable = {
+    use base64::{
+        alphabet::STANDARD,
+        engine::fast_portable::{FastPortable, NO_PAD},
+    };
+    &FastPortable::from(&STANDARD, NO_PAD)
+};
+
 /// The ephemeral key bytes in a piv-p256 stanza.
 ///
 /// The bytes contain a compressed SEC-1 encoding of a valid point.
@@ -65,8 +73,8 @@ impl From<RecipientLine> for Stanza {
         Stanza {
             tag: STANZA_TAG.to_owned(),
             args: vec![
-                base64::encode_config(&r.tag, base64::STANDARD_NO_PAD),
-                base64::encode_config(r.epk_bytes.as_bytes(), base64::STANDARD_NO_PAD),
+                base64::encode_engine(&r.tag, STANDARD_NO_PAD),
+                base64::encode_engine(r.epk_bytes.as_bytes(), STANDARD_NO_PAD),
             ],
             body: r.encrypted_file_key.to_vec(),
         }
@@ -84,7 +92,7 @@ impl RecipientLine {
                 return None;
             }
 
-            base64::decode_config_slice(arg, base64::STANDARD_NO_PAD, buf.as_mut())
+            base64::decode_engine_slice(arg, buf.as_mut(), STANDARD_NO_PAD)
                 .ok()
                 .map(|_| buf)
         }
