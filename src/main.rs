@@ -229,7 +229,7 @@ fn print_multiple(
 
     let mut printed = 0;
     for reader in readers.iter()?.filter(key::filter_connected) {
-        let mut yubikey = reader.open()?;
+        let mut yubikey = key::open_connection(&reader)?;
         if let Some(serial) = serial {
             if yubikey.serial() != serial {
                 continue;
@@ -401,7 +401,7 @@ fn main() -> Result<(), Error> {
         let reader_names = readers_list
             .iter()
             .map(|reader| {
-                reader.open().map(|yk| {
+                key::open_connection(reader).map(|yk| {
                     i18n_embed_fl::fl!(
                         LANGUAGE_LOADER,
                         "cli-setup-yk-name",
