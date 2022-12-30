@@ -48,7 +48,7 @@ lazy_static = "1"
 rust-embed = "6"
 
 # GnuPG coexistence
-sysinfo = ">=0.26, <0.26.4"
+sysinfo = "0.27"
 
 [dev-dependencies]
 flate2 = "1"
