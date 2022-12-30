@@ -393,7 +393,11 @@ fn main() -> Result<(), Error> {
                                 x509_parser::parse_x509_certificate(key.certificate().as_ref())
                                     .unwrap();
                             let (name, _) = util::extract_name(&cert, true).unwrap();
-                            let created = cert.validity().not_before.to_rfc2822();
+                            let created = cert
+                                .validity()
+                                .not_before
+                                .to_rfc2822()
+                                .unwrap_or_else(|e| format!("Invalid date: {}", e));
 
                             format!("{}, created: {}", name, created)
                         })

@@ -22,24 +22,24 @@ assets = [
 ]
 
 [dependencies]
-age-core = "0.8"
-age-plugin = "0.3"
+age-core = "0.9"
+age-plugin = "0.4"
 base64 = "0.13"
-bech32 = "0.8"
+bech32 = "0.9"
 console = { version = "0.15", default-features = false }
 dialoguer = { version = "0.9", default-features = false, features = ["password"] }
 env_logger = "0.9"
 gumdrop = "0.8"
 hex = "0.4"
 log = "0.4"
-p256 = { version = "0.9", features = ["ecdh"] }
+p256 = { version = "0.11", features = ["ecdh"] }
 pcsc = "2.4"
 rand = "0.8"
-sha2 = "0.9"
+sha2 = "0.10"
 which = "4.1"
 x509 = "0.2"
-x509-parser = "0.12"
-yubikey = { version = "0.5", features = ["untested"] }
+x509-parser = "0.14"
+yubikey = { version = "0.7", features = ["untested"] }
 
 # Translations
 i18n-embed = { version = "0.13", features = ["desktop-requester", "fluent-system"] }

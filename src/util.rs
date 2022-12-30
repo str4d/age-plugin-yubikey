@@ -122,7 +122,10 @@ impl Metadata {
         // https://developers.yubico.com/PIV/Introduction/PIV_attestation.html
         let policies = |c: &X509Certificate| {
             c.tbs_certificate
-                .find_extension(&Oid::from(POLICY_EXTENSION_OID).unwrap())
+                .get_extension_unique(&Oid::from(POLICY_EXTENSION_OID).unwrap())
+                // If the extension is duplicated, we assume it is invalid.
+                .ok()
+                .flatten()
                 // If the encoded extension doesn't have 2 bytes, we assume it is invalid.
                 .filter(|policy| policy.value.len() >= 2)
                 .map(|policy| {
@@ -170,7 +173,11 @@ impl Metadata {
                 serial: yubikey.serial(),
                 slot,
                 name,
-                created: cert.validity().not_before.to_rfc2822(),
+                created: cert
+                    .validity()
+                    .not_before
+                    .to_rfc2822()
+                    .unwrap_or_else(|e| format!("Invalid date: {}", e)),
                 pin_policy,
                 touch_policy,
             })

@@ -1,10 +1,14 @@
 use age_core::{
     format::{FileKey, Stanza},
-    primitives::{aead_encrypt, hkdf},
+    primitives::aead_encrypt,
     secrecy::ExposeSecret,
 };
-use p256::{ecdh::EphemeralSecret, elliptic_curve::sec1::ToEncodedPoint};
+use p256::{
+    ecdh::EphemeralSecret,
+    elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint},
+};
 use rand::rngs::OsRng;
+use sha2::Sha256;
 
 use crate::{p256::Recipient, STANZA_TAG};
 
@@ -23,7 +27,11 @@ pub(crate) struct EphemeralKeyBytes(p256::EncodedPoint);
 impl EphemeralKeyBytes {
     fn from_bytes(bytes: [u8; EPK_BYTES]) -> Option<Self> {
         let encoded = p256::EncodedPoint::from_bytes(&bytes).ok()?;
-        if encoded.is_compressed() && encoded.decompress().is_some() {
+        if encoded.is_compressed()
+            && p256::PublicKey::from_encoded_point(&encoded)
+                .is_some()
+                .into()
+        {
             Some(EphemeralKeyBytes(encoded))
         } else {
             None
@@ -39,9 +47,9 @@ impl EphemeralKeyBytes {
     }
 
     pub(crate) fn decompress(&self) -> p256::EncodedPoint {
-        self.0
-            .decompress()
-            .expect("EphemeralKeyBytes is a valid compressed encoding by construction")
+        // EphemeralKeyBytes is a valid compressed encoding by construction.
+        let p = p256::PublicKey::from_encoded_point(&self.0).unwrap();
+        p.to_encoded_point(false)
     }
 }
 
@@ -111,7 +119,14 @@ impl RecipientLine {
         salt.extend_from_slice(epk_bytes.as_bytes());
         salt.extend_from_slice(pk.to_encoded().as_bytes());
 
-        let enc_key = hkdf(&salt, STANZA_KEY_LABEL, shared_secret.as_bytes());
+        let enc_key = {
+            let mut okm = [0; 32];
+            shared_secret
+                .extract::<Sha256>(Some(&salt))
+                .expand(STANZA_KEY_LABEL, &mut okm)
+                .expect("okm is the correct length");
+            okm
+        };
 
         let encrypted_file_key = {
             let mut key = [0; ENCRYPTED_FILE_KEY_BYTES];
