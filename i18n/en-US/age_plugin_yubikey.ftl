@@ -170,7 +170,14 @@ plugin-err-pin-required     = A PIN is required for {-yubikey} with serial {$yub
 
 ## Errors
 
-err-custom-mgmt-key      = Custom unprotected management keys are not supported.
+err-custom-mgmt-key = Custom unprotected management keys are not supported.
+rec-custom-mgmt-key =
+    You can use the {-yubikey} Manager CLI to change to a protected management key:
+    {"  "}{$cmd}
+
+    See here for more information about {-yubikey} Manager:
+    {"  "}{$url}
+
 err-invalid-flag-command = Flag '{$flag}' cannot be used with '{$command}'.
 err-invalid-flag-tui     = Flag '{$flag}' cannot be used with the interactive interface.
 err-invalid-pin-length   = The PIN needs to be 1-8 characters.
