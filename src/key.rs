@@ -247,6 +247,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
             yubikey_serial = yubikey.serial().to_string(),
             default_pin = DEFAULT_PIN,
         ))
+        .report(true)
         .interact()?;
     yubikey.verify_pin(pin.as_bytes())?;
 
