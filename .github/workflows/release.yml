@@ -17,7 +17,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        name: [linux, windows, macos]
+        name:
+          - linux
+          - macos-arm64
+          - macos-x86_64
+          - windows
         include:
           - name: linux
             os: ubuntu-18.04
@@ -31,7 +35,14 @@ jobs:
             archive_name: age-plugin-yubikey.zip
             asset_suffix: x86_64-windows.zip
 
-          - name: macos
+          - name: macos-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            build_flags: --target aarch64-apple-darwin
+            archive_name: age-plugin-yubikey.tar.gz
+            asset_suffix: arm64-darwin.tar.gz
+
+          - name: macos-x86_64
             os: macos-latest
             archive_name: age-plugin-yubikey.tar.gz
             asset_suffix: x86_64-darwin.tar.gz
