@@ -48,7 +48,21 @@ impl From<yubikey::Error> for Error {
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::CustomManagementKey => wlnfl!(f, "err-custom-mgmt-key")?,
+            Error::CustomManagementKey => {
+                wlnfl!(f, "err-custom-mgmt-key")?;
+                let cmd = "ykman piv access change-management-key --protect";
+                let url = "https://developers.yubico.com/yubikey-manager/";
+                writeln!(
+                    f,
+                    "{}",
+                    fl!(
+                        crate::LANGUAGE_LOADER,
+                        "rec-custom-mgmt-key",
+                        cmd = cmd,
+                        url = url,
+                    ),
+                )?;
+            }
             Error::InvalidFlagCommand(flag, command) => writeln!(
                 f,
                 "{}",
