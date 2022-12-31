@@ -106,6 +106,20 @@ fn hunt_agents() -> bool {
                     interrupted = true;
                 }
             }
+            "yubikey-agent" | "yubikey-agent.exe" => {
+                // yubikey-agent releases all YubiKey locks when it receives a SIGHUP.
+                match process.kill_with(Signal::Hangup) {
+                    Some(true) => {
+                        debug!("Sent SIGHUP to yubikey-agent (PID {})", process.pid());
+                        interrupted = true;
+                    }
+                    Some(false) => (),
+                    None => debug!(
+                        "Found yubikey-agent (PID {}) but platform doesn't support SIGHUP",
+                        process.pid(),
+                    ),
+                }
+            }
             _ => (),
         }
     }
