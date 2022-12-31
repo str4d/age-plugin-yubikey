@@ -77,37 +77,40 @@ pub(crate) fn wait_for_readers() -> Result<Context, Error> {
     }
 }
 
-/// Stops `scdaemon` if it is running.
+/// Looks for agent processes that might be holding exclusive access to a YubiKey, and
+/// asks them as nicely as possible to release it.
 ///
-/// Returns `true` if `scdaemon` was running and was successfully interrupted (or killed
-/// if the platform doesn't support interrupts).
-fn stop_scdaemon() -> bool {
-    debug!("Sharing violation encountered, looking for scdaemon processes to stop");
+/// Returns `true` if any known agent was running and was successfully interrupted (or
+/// killed if the platform doesn't support interrupts).
+fn hunt_agents() -> bool {
+    debug!("Sharing violation encountered, looking for agent processes");
 
-    use sysinfo::{
-        Process, ProcessExt, ProcessRefreshKind, RefreshKind, Signal, System, SystemExt,
-    };
+    use sysinfo::{ProcessExt, ProcessRefreshKind, RefreshKind, Signal, System, SystemExt};
 
     let mut interrupted = false;
 
     let sys =
         System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
 
-    for process in sys
-        .processes()
-        .values()
-        .filter(|val: &&Process| ["scdaemon", "scdaemon.exe"].contains(&val.name()))
-    {
-        if process
-            .kill_with(Signal::Interrupt)
-            .unwrap_or_else(|| process.kill())
-        {
-            debug!("Stopped scdaemon (PID {})", process.pid());
-            interrupted = true;
+    for process in sys.processes().values() {
+        match process.name() {
+            "scdaemon" | "scdaemon.exe" => {
+                // gpg-agent runs scdaemon to interact with smart cards. The canonical way
+                // to reload it is `gpgconf --reload scdaemon`, which kills and restarts
+                // the process. We emulate that here with SIGINT (which it listens to).
+                if process
+                    .kill_with(Signal::Interrupt)
+                    .unwrap_or_else(|| process.kill())
+                {
+                    debug!("Stopped scdaemon (PID {})", process.pid());
+                    interrupted = true;
+                }
+            }
+            _ => (),
         }
     }
 
-    // If we did interrupt `scdaemon`, pause briefly to allow it to exit.
+    // If we did interrupt an agent, pause briefly to allow it to finish up.
     if interrupted {
         sleep(Duration::from_millis(100));
     }
@@ -121,7 +124,7 @@ fn open_sesame(
     op().or_else(|e| match e {
         yubikey::Error::PcscError {
             inner: Some(pcsc::Error::SharingViolation),
-        } if stop_scdaemon() => op(),
+        } if hunt_agents() => op(),
         _ => Err(e),
     })
 }
@@ -129,7 +132,7 @@ fn open_sesame(
 /// Opens a connection to this reader, returning a `YubiKey` if successful.
 ///
 /// This is equivalent to [`Reader::open`], but additionally handles the presence of
-/// `scdaemon` (which can indefinitely hold exclusive access to a YubiKey).
+/// agents (which can indefinitely hold exclusive access to a YubiKey).
 pub(crate) fn open_connection(reader: &Reader) -> Result<YubiKey, yubikey::Error> {
     open_sesame(|| reader.open())
 }
@@ -137,7 +140,7 @@ pub(crate) fn open_connection(reader: &Reader) -> Result<YubiKey, yubikey::Error
 /// Opens a YubiKey with a specific serial number.
 ///
 /// This is equivalent to [`YubiKey::open_by_serial`], but additionally handles the
-/// presence of `scdaemon` (which can indefinitely hold exclusive access to a YubiKey).
+/// presence of agents (which can indefinitely hold exclusive access to a YubiKey).
 fn open_by_serial(serial: Serial) -> Result<YubiKey, yubikey::Error> {
     open_sesame(|| YubiKey::open_by_serial(serial))
 }
