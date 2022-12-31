@@ -1,7 +1,7 @@
 use rand::{rngs::OsRng, RngCore};
 use x509::RelativeDistinguishedName;
 use yubikey::{
-    certificate::{Certificate, PublicKeyInfo},
+    certificate::Certificate,
     piv::{generate as yubikey_generate, AlgorithmId, RetiredSlotId, SlotId},
     Key, PinPolicy, TouchPolicy, YubiKey,
 };
@@ -106,12 +106,7 @@ impl IdentityBuilder {
             touch_policy,
         )?;
 
-        let recipient = match &generated {
-            PublicKeyInfo::EcP256(pubkey) => {
-                Recipient::from_encoded(pubkey).expect("YubiKey generates a valid pubkey")
-            }
-            _ => unreachable!(),
-        };
+        let recipient = Recipient::from_spki(&generated).expect("YubiKey generates a valid pubkey");
         let stub = Stub::new(yubikey.serial(), slot, &recipient);
 
         // Pick a random serial for the new self-signed certificate.

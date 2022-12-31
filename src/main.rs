@@ -13,7 +13,6 @@ use i18n_embed::{
 use lazy_static::lazy_static;
 use rust_embed::RustEmbed;
 use yubikey::{
-    certificate::PublicKeyInfo,
     piv::{RetiredSlotId, SlotId},
     reader::Context,
     Key, PinPolicy, Serial, TouchPolicy,
@@ -196,9 +195,9 @@ fn print_single(
     let mut keys = Key::list(&mut yubikey)?.into_iter().filter_map(|key| {
         // - We only use the retired slots.
         // - Only P-256 keys are compatible with us.
-        match (key.slot(), key.certificate().subject_pki()) {
-            (SlotId::Retired(slot), PublicKeyInfo::EcP256(pubkey)) => {
-                p256::Recipient::from_encoded(pubkey).map(|r| (key, slot, r))
+        match key.slot() {
+            SlotId::Retired(slot) => {
+                p256::Recipient::from_certificate(key.certificate()).map(|r| (key, slot, r))
             }
             _ => None,
         }
@@ -244,12 +243,9 @@ fn print_multiple(
             };
 
             // Only P-256 keys are compatible with us.
-            let recipient = match key.certificate().subject_pki() {
-                PublicKeyInfo::EcP256(pubkey) => match p256::Recipient::from_encoded(pubkey) {
-                    Some(recipient) => recipient,
-                    None => continue,
-                },
-                _ => continue,
+            let recipient = match p256::Recipient::from_certificate(key.certificate()) {
+                Some(recipient) => recipient,
+                None => continue,
             };
 
             let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
@@ -429,20 +425,17 @@ fn main() -> Result<(), Error> {
             .map(|&slot| {
                 keys.iter()
                     .find(|key| key.slot() == SlotId::Retired(slot))
-                    .map(|key| match key.certificate().subject_pki() {
-                        PublicKeyInfo::EcP256(pubkey) => {
-                            p256::Recipient::from_encoded(pubkey).map(|_| {
-                                // Cache the details we need to display to the user.
-                                let (_, cert) =
-                                    x509_parser::parse_x509_certificate(key.certificate().as_ref())
-                                        .unwrap();
-                                let (name, _) = util::extract_name(&cert, true).unwrap();
-                                let created = cert.validity().not_before.to_rfc2822();
+                    .map(|key| {
+                        p256::Recipient::from_certificate(key.certificate()).map(|_| {
+                            // Cache the details we need to display to the user.
+                            let (_, cert) =
+                                x509_parser::parse_x509_certificate(key.certificate().as_ref())
+                                    .unwrap();
+                            let (name, _) = util::extract_name(&cert, true).unwrap();
+                            let created = cert.validity().not_before.to_rfc2822();
 
-                                format!("{}, created: {}", name, created)
-                            })
-                        }
-                        _ => None,
+                            format!("{}, created: {}", name, created)
+                        })
                     })
             })
             .collect();
@@ -492,12 +485,8 @@ fn main() -> Result<(), Error> {
             };
 
             if let Some(key) = keys.iter().find(|key| key.slot() == SlotId::Retired(slot)) {
-                let recipient = match key.certificate().subject_pki() {
-                    PublicKeyInfo::EcP256(pubkey) => {
-                        p256::Recipient::from_encoded(pubkey).expect("We checked this above")
-                    }
-                    _ => unreachable!(),
-                };
+                let recipient = p256::Recipient::from_certificate(key.certificate())
+                    .expect("We checked this above");
 
                 if Confirm::new()
                     .with_prompt(i18n_embed_fl::fl!(

@@ -15,7 +15,7 @@ use std::iter;
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime};
 use yubikey::{
-    certificate::{Certificate, PublicKeyInfo},
+    certificate::Certificate,
     piv::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
     reader::{Context, Reader},
     MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
@@ -459,11 +459,10 @@ impl Stub {
         // Read the pubkey from the YubiKey slot and check it still matches.
         let (cert, pk) = match Certificate::read(&mut yubikey, SlotId::Retired(self.slot))
             .ok()
-            .and_then(|cert| match cert.subject_pki() {
-                PublicKeyInfo::EcP256(pubkey) => Recipient::from_encoded(pubkey)
+            .and_then(|cert| {
+                Recipient::from_certificate(&cert)
                     .filter(|pk| pk.tag() == self.tag)
-                    .map(|pk| (cert, pk)),
-                _ => None,
+                    .map(|pk| (cert, pk))
             }) {
             Some(pk) => pk,
             None => {
