@@ -134,7 +134,6 @@ impl IdentityBuilder {
             )],
         )?;
 
-        let (_, cert) = x509_parser::parse_x509_certificate(cert.as_ref()).unwrap();
         let metadata = Metadata::extract(yubikey, slot, &cert, false).unwrap();
 
         Ok((

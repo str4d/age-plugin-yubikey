@@ -542,9 +542,8 @@ impl Connection {
     ) -> io::Result<Result<(), identity::Error>> {
         // Check if we can skip requesting a PIN.
         if self.cached_metadata.is_none() {
-            let (_, cert) = x509_parser::parse_x509_certificate(self.cert.as_ref()).unwrap();
             self.cached_metadata =
-                match Metadata::extract(&mut self.yubikey, self.slot, &cert, true) {
+                match Metadata::extract(&mut self.yubikey, self.slot, &self.cert, true) {
                     None => {
                         return Ok(Err(identity::Error::Identity {
                             index: self.identity_index,

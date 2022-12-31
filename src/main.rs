@@ -211,10 +211,7 @@ fn print_single(
         .ok_or(Error::SlotHasNoIdentity(slot))?;
 
     let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
-    let metadata = x509_parser::parse_x509_certificate(key.certificate().as_ref())
-        .ok()
-        .and_then(|(_, cert)| util::Metadata::extract(&mut yubikey, slot, &cert, true))
-        .unwrap();
+    let metadata = util::Metadata::extract(&mut yubikey, slot, key.certificate(), true).unwrap();
 
     printer(stub, recipient, metadata);
 
@@ -252,9 +249,7 @@ fn print_multiple(
             };
 
             let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
-            let metadata = match x509_parser::parse_x509_certificate(key.certificate().as_ref())
-                .ok()
-                .and_then(|(_, cert)| util::Metadata::extract(&mut yubikey, slot, &cert, all))
+            let metadata = match util::Metadata::extract(&mut yubikey, slot, key.certificate(), all)
             {
                 Some(res) => res,
                 None => continue,
@@ -479,10 +474,9 @@ fn main() -> Result<(), Error> {
                     .interact()?
                 {
                     let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
-                    let (_, cert) =
-                        x509_parser::parse_x509_certificate(key.certificate().as_ref()).unwrap();
                     let metadata =
-                        util::Metadata::extract(&mut yubikey, slot, &cert, true).unwrap();
+                        util::Metadata::extract(&mut yubikey, slot, key.certificate(), true)
+                            .unwrap();
 
                     ((stub, recipient, metadata), false)
                 } else {
