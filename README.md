@@ -21,10 +21,31 @@ Help from new packagers is very welcome.
 ### Linux, BSD, etc.
 
 On non-Windows, non-macOS systems, you need to ensure that the `pcscd` service
-is installed and running. On Debian or Ubuntu, you can do this with:
+is installed and running. 
+
+#### Debian or Ubuntu
 
 ```
 $ sudo apt-get install pcscd
+```
+
+#### OpenBSD
+
+As ```root``` do:
+
+```
+$ pkg_add pcsc-lite
+$ rcctl enable pcscd
+$ rcctl start pcscd
+```
+
+#### FreeBSD
+
+As ```root``` do:
+```
+$ pkg install pcsc-lite
+$ service pcscd enable
+$ service pcscd start
 ```
 
 ### Windows Subsystem for Linux (WSL)
