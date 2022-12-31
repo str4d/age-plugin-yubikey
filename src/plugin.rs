@@ -71,8 +71,7 @@ impl RecipientPluginV1 for RecipientPlugin {
                 Ok(Some(conn)) => yk_recipients.push(conn.recipient().clone()),
                 Ok(None) => yk_errors.push(recipient::Error::Identity {
                     index: stub.identity_index,
-                    message: i18n_embed_fl::fl!(
-                        crate::LANGUAGE_LOADER,
+                    message: fl!(
                         "plugin-err-yk-opening",
                         yubikey_serial = stub.serial.to_string(),
                     ),

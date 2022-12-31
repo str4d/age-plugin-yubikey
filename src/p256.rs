@@ -1,6 +1,8 @@
 use bech32::{ToBase32, Variant};
 use p256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use sha2::{Digest, Sha256};
+use yubikey::{certificate::PublicKeyInfo, Certificate};
+
 use std::fmt;
 
 use crate::RECIPIENT_PREFIX;
@@ -42,11 +44,22 @@ impl Recipient {
         }
     }
 
+    pub(crate) fn from_certificate(cert: &Certificate) -> Option<Self> {
+        Self::from_spki(cert.subject_pki())
+    }
+
+    pub(crate) fn from_spki(spki: &PublicKeyInfo) -> Option<Self> {
+        match spki {
+            PublicKeyInfo::EcP256(pubkey) => Self::from_encoded(pubkey),
+            _ => None,
+        }
+    }
+
     /// Attempts to parse a valid YubiKey recipient from its SEC-1 encoding.
     ///
     /// This accepts both compressed (as used by the plugin) and uncompressed (as used in
     /// the YubiKey certificate) encodings.
-    pub(crate) fn from_encoded(encoded: &p256::EncodedPoint) -> Option<Self> {
+    fn from_encoded(encoded: &p256::EncodedPoint) -> Option<Self> {
         p256::PublicKey::from_encoded_point(encoded).map(Recipient)
     }
 
