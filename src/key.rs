@@ -18,7 +18,7 @@ use yubikey::{
     certificate::Certificate,
     piv::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
     reader::{Context, Reader},
-    MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
+    Key, MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
 use crate::{
@@ -301,6 +301,32 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+/// Returns an iterator of keys that are occupying plugin-compatible slots, along with the
+/// corresponding recipient if the key is compatible with this plugin.
+pub(crate) fn list_slots(
+    yubikey: &mut YubiKey,
+) -> Result<impl Iterator<Item = (Key, RetiredSlotId, Option<Recipient>)>, Error> {
+    Ok(Key::list(yubikey)?.into_iter().filter_map(|key| {
+        // We only use the retired slots.
+        match key.slot() {
+            SlotId::Retired(slot) => {
+                // Only P-256 keys are compatible with us.
+                let recipient = Recipient::from_certificate(key.certificate());
+                Some((key, slot, recipient))
+            }
+            _ => None,
+        }
+    }))
+}
+
+/// Returns an iterator of keys that are compatible with this plugin.
+pub(crate) fn list_compatible(
+    yubikey: &mut YubiKey,
+) -> Result<impl Iterator<Item = (Key, RetiredSlotId, Recipient)>, Error> {
+    list_slots(yubikey)
+        .map(|iter| iter.filter_map(|(key, slot, res)| res.map(|recipient| (key, slot, recipient))))
 }
 
 /// A reference to an age key stored in a YubiKey.

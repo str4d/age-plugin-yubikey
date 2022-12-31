@@ -12,11 +12,7 @@ use i18n_embed::{
 };
 use lazy_static::lazy_static;
 use rust_embed::RustEmbed;
-use yubikey::{
-    piv::{RetiredSlotId, SlotId},
-    reader::Context,
-    Key, PinPolicy, Serial, TouchPolicy,
-};
+use yubikey::{piv::RetiredSlotId, reader::Context, PinPolicy, Serial, TouchPolicy};
 
 mod builder;
 mod error;
@@ -195,18 +191,7 @@ fn print_single(
 ) -> Result<(), Error> {
     let mut yubikey = key::open(serial)?;
 
-    let mut keys = Key::list(&mut yubikey)?.into_iter().filter_map(|key| {
-        // - We only use the retired slots.
-        // - Only P-256 keys are compatible with us.
-        match key.slot() {
-            SlotId::Retired(slot) => {
-                p256::Recipient::from_certificate(key.certificate()).map(|r| (key, slot, r))
-            }
-            _ => None,
-        }
-    });
-
-    let (key, slot, recipient) = keys
+    let (key, slot, recipient) = key::list_compatible(&mut yubikey)?
         .find(|(_, s, _)| s == &slot)
         .ok_or(Error::SlotHasNoIdentity(slot))?;
 
@@ -235,19 +220,7 @@ fn print_multiple(
             }
         }
 
-        for key in Key::list(&mut yubikey)? {
-            // We only use the retired slots.
-            let slot = match key.slot() {
-                SlotId::Retired(slot) => slot,
-                _ => continue,
-            };
-
-            // Only P-256 keys are compatible with us.
-            let recipient = match p256::Recipient::from_certificate(key.certificate()) {
-                Some(recipient) => recipient,
-                None => continue,
-            };
-
+        for (key, slot, recipient) in key::list_compatible(&mut yubikey)? {
             let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
             let metadata = match util::Metadata::extract(&mut yubikey, slot, key.certificate(), all)
             {
@@ -405,16 +378,16 @@ fn main() -> Result<(), Error> {
             None => return Ok(()),
         };
 
-        let keys = Key::list(&mut yubikey)?;
+        let keys = key::list_slots(&mut yubikey)?.collect::<Vec<_>>();
 
         // Identify slots that we can't allow the user to select.
         let slot_details: Vec<_> = USABLE_SLOTS
             .iter()
             .map(|&slot| {
                 keys.iter()
-                    .find(|key| key.slot() == SlotId::Retired(slot))
-                    .map(|key| {
-                        p256::Recipient::from_certificate(key.certificate()).map(|_| {
+                    .find(|(_, s, _)| s == &slot)
+                    .map(|(key, _, recipient)| {
+                        recipient.as_ref().map(|_| {
                             // Cache the details we need to display to the user.
                             let (_, cert) =
                                 x509_parser::parse_x509_certificate(key.certificate().as_ref())
@@ -465,9 +438,8 @@ fn main() -> Result<(), Error> {
                 }
             };
 
-            if let Some(key) = keys.iter().find(|key| key.slot() == SlotId::Retired(slot)) {
-                let recipient = p256::Recipient::from_certificate(key.certificate())
-                    .expect("We checked this above");
+            if let Some((key, _, recipient)) = keys.into_iter().find(|(_, s, _)| s == &slot) {
+                let recipient = recipient.expect("We checked this above");
 
                 if Confirm::new()
                     .with_prompt(fl!("cli-setup-use-existing", slot_index = slot_index))
