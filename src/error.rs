@@ -1,4 +1,3 @@
-use i18n_embed_fl::fl;
 use std::fmt;
 use std::io;
 use yubikey::{piv::RetiredSlotId, Serial};
@@ -9,6 +8,9 @@ macro_rules! wlnfl {
     ($f:ident, $message_id:literal) => {
         writeln!($f, "{}", $crate::fl!($message_id))
     };
+    ($f:ident, $message_id:literal, $($kwarg:expr),* $(,)*) => {{
+        writeln!($f, "{}", $crate::fl!($message_id, $($kwarg,)*))
+    }};
 }
 
 pub enum Error {
@@ -52,105 +54,44 @@ impl fmt::Debug for Error {
                 wlnfl!(f, "err-custom-mgmt-key")?;
                 let cmd = "ykman piv access change-management-key --protect";
                 let url = "https://developers.yubico.com/yubikey-manager/";
-                writeln!(
-                    f,
-                    "{}",
-                    fl!(
-                        crate::LANGUAGE_LOADER,
-                        "rec-custom-mgmt-key",
-                        cmd = cmd,
-                        url = url,
-                    ),
-                )?;
+                wlnfl!(f, "rec-custom-mgmt-key", cmd = cmd, url = url)?;
             }
-            Error::InvalidFlagCommand(flag, command) => writeln!(
+            Error::InvalidFlagCommand(flag, command) => wlnfl!(
                 f,
-                "{}",
-                fl!(
-                    crate::LANGUAGE_LOADER,
-                    "err-invalid-flag-command",
-                    flag = flag.as_str(),
-                    command = command.as_str(),
-                ),
+                "err-invalid-flag-command",
+                flag = flag.as_str(),
+                command = command.as_str(),
             )?,
-            Error::InvalidFlagTui(flag) => writeln!(
-                f,
-                "{}",
-                fl!(
-                    crate::LANGUAGE_LOADER,
-                    "err-invalid-flag-tui",
-                    flag = flag.as_str(),
-                ),
-            )?,
+            Error::InvalidFlagTui(flag) => wlnfl!(f, "err-invalid-flag-tui", flag = flag.as_str())?,
             Error::InvalidPinLength => wlnfl!(f, "err-invalid-pin-length")?,
-            Error::InvalidPinPolicy(s) => writeln!(
+            Error::InvalidPinPolicy(s) => wlnfl!(
                 f,
-                "{}",
-                fl!(
-                    crate::LANGUAGE_LOADER,
-                    "err-invalid-pin-policy",
-                    policy = s.as_str(),
-                    expected = "always, once, never",
-                ),
+                "err-invalid-pin-policy",
+                policy = s.as_str(),
+                expected = "always, once, never",
             )?,
-            Error::InvalidSlot(slot) => writeln!(
+            Error::InvalidSlot(slot) => wlnfl!(f, "err-invalid-slot", slot = slot)?,
+            Error::InvalidTouchPolicy(s) => wlnfl!(
                 f,
-                "{}",
-                fl!(crate::LANGUAGE_LOADER, "err-invalid-slot", slot = slot),
+                "err-invalid-touch-policy",
+                policy = s.as_str(),
+                expected = "always, cached, never",
             )?,
-            Error::InvalidTouchPolicy(s) => writeln!(
-                f,
-                "{}",
-                fl!(
-                    crate::LANGUAGE_LOADER,
-                    "err-invalid-touch-policy",
-                    policy = s.as_str(),
-                    expected = "always, cached, never",
-                ),
-            )?,
-            Error::Io(e) => writeln!(
-                f,
-                "{}",
-                fl!(crate::LANGUAGE_LOADER, "err-io", err = e.to_string()),
-            )?,
+            Error::Io(e) => wlnfl!(f, "err-io", err = e.to_string())?,
             Error::MultipleCommands => wlnfl!(f, "err-multiple-commands")?,
             Error::MultipleYubiKeys => wlnfl!(f, "err-multiple-yubikeys")?,
-            Error::NoEmptySlots(serial) => writeln!(
-                f,
-                "{}",
-                fl!(
-                    crate::LANGUAGE_LOADER,
-                    "err-no-empty-slots",
-                    serial = serial.to_string(),
-                ),
-            )?,
-            Error::NoMatchingSerial(serial) => writeln!(
-                f,
-                "{}",
-                fl!(
-                    crate::LANGUAGE_LOADER,
-                    "err-no-matching-serial",
-                    serial = serial.to_string(),
-                ),
-            )?,
-            Error::SlotHasNoIdentity(slot) => writeln!(
-                f,
-                "{}",
-                fl!(
-                    crate::LANGUAGE_LOADER,
-                    "err-slot-has-no-identity",
-                    slot = slot_to_ui(slot),
-                ),
-            )?,
-            Error::SlotIsNotEmpty(slot) => writeln!(
-                f,
-                "{}",
-                fl!(
-                    crate::LANGUAGE_LOADER,
-                    "err-slot-is-not-empty",
-                    slot = slot_to_ui(slot),
-                ),
-            )?,
+            Error::NoEmptySlots(serial) => {
+                wlnfl!(f, "err-no-empty-slots", serial = serial.to_string())?
+            }
+            Error::NoMatchingSerial(serial) => {
+                wlnfl!(f, "err-no-matching-serial", serial = serial.to_string())?
+            }
+            Error::SlotHasNoIdentity(slot) => {
+                wlnfl!(f, "err-slot-has-no-identity", slot = slot_to_ui(slot))?
+            }
+            Error::SlotIsNotEmpty(slot) => {
+                wlnfl!(f, "err-slot-is-not-empty", slot = slot_to_ui(slot))?
+            }
             Error::TimedOut => wlnfl!(f, "err-timed-out")?,
             Error::UseListForSingleSlot => wlnfl!(f, "err-use-list-for-single")?,
             Error::YubiKey(e) => match e {
@@ -161,55 +102,23 @@ impl fmt::Debug for Error {
                     if cfg!(windows) {
                         wlnfl!(f, "err-yk-no-service-win")?;
                         let url = "https://learn.microsoft.com/en-us/windows/security/identity-protection/smart-cards/smart-card-debugging-information#smart-card-service";
-                        writeln!(
-                            f,
-                            "{}",
-                            fl!(crate::LANGUAGE_LOADER, "rec-yk-no-service-win", url = url),
-                        )?;
+                        wlnfl!(f, "rec-yk-no-service-win", url = url)?;
                     } else if cfg!(target_os = "macos") {
                         wlnfl!(f, "err-yk-no-service-macos")?;
                         let url = "https://apple.stackexchange.com/a/438198";
-                        writeln!(
-                            f,
-                            "{}",
-                            fl!(crate::LANGUAGE_LOADER, "rec-yk-no-service-macos", url = url),
-                        )?;
+                        wlnfl!(f, "rec-yk-no-service-macos", url = url)?;
                     } else {
                         wlnfl!(f, "err-yk-no-service-pcscd")?;
                         let apt = "sudo apt-get install pcscd";
-                        writeln!(
-                            f,
-                            "{}",
-                            fl!(crate::LANGUAGE_LOADER, "rec-yk-no-service-pcscd", apt = apt),
-                        )?;
+                        wlnfl!(f, "rec-yk-no-service-pcscd", apt = apt)?;
                     }
                 }
-                yubikey::Error::WrongPin { tries } => writeln!(
-                    f,
-                    "{}",
-                    fl!(crate::LANGUAGE_LOADER, "err-yk-wrong-pin", tries = tries),
-                )?,
+                yubikey::Error::WrongPin { tries } => wlnfl!(f, "err-yk-wrong-pin", tries = tries)?,
                 e => {
-                    writeln!(
-                        f,
-                        "{}",
-                        fl!(
-                            crate::LANGUAGE_LOADER,
-                            "err-yk-general",
-                            err = e.to_string(),
-                        ),
-                    )?;
+                    wlnfl!(f, "err-yk-general", err = e.to_string())?;
                     use std::error::Error;
                     if let Some(inner) = e.source() {
-                        writeln!(
-                            f,
-                            "{}",
-                            fl!(
-                                crate::LANGUAGE_LOADER,
-                                "err-yk-general-cause",
-                                inner_err = inner.to_string(),
-                            ),
-                        )?;
+                        wlnfl!(f, "err-yk-general-cause", inner_err = inner.to_string())?;
                     }
                 }
             },

@@ -47,11 +47,7 @@ pub(crate) fn filter_connected(reader: &Reader) -> bool {
             {
                 warn!(
                     "{}",
-                    i18n_embed_fl::fl!(
-                        crate::LANGUAGE_LOADER,
-                        "warn-yk-not-connected",
-                        yubikey_name = reader.name(),
-                    )
+                    fl!("warn-yk-not-connected", yubikey_name = reader.name())
                 );
                 false
             } else {
@@ -147,11 +143,7 @@ pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
         if let Some(serial) = serial {
             eprintln!(
                 "{}",
-                i18n_embed_fl::fl!(
-                    crate::LANGUAGE_LOADER,
-                    "open-yk-with-serial",
-                    yubikey_serial = serial.to_string(),
-                )
+                fl!("open-yk-with-serial", yubikey_serial = serial.to_string())
             );
         } else {
             eprintln!("{}", fl!("open-yk-without-serial"));
@@ -196,8 +188,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
 
     eprintln!();
     let pin = Password::new()
-        .with_prompt(i18n_embed_fl::fl!(
-            crate::LANGUAGE_LOADER,
+        .with_prompt(fl!(
             "mgr-enter-pin",
             yubikey_serial = yubikey.serial().to_string(),
             default_pin = DEFAULT_PIN,
@@ -211,11 +202,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
         eprintln!("{}", fl!("mgr-change-default-pin"));
         eprintln!();
         let current_puk = Password::new()
-            .with_prompt(i18n_embed_fl::fl!(
-                crate::LANGUAGE_LOADER,
-                "mgr-enter-current-puk",
-                default_puk = DEFAULT_PUK,
-            ))
+            .with_prompt(fl!("mgr-enter-current-puk", default_puk = DEFAULT_PUK))
             .interact()?;
         let new_pin = Password::new()
             .with_prompt(fl!("mgr-choose-new-pin"))
@@ -244,8 +231,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
         mgm_key.set_protected(yubikey).map_err(|e| {
             eprintln!(
                 "{}",
-                i18n_embed_fl::fl!(
-                    crate::LANGUAGE_LOADER,
+                fl!(
                     "mgr-changing-mgmt-key-error",
                     management_key = hex::encode(mgm_key.as_ref()),
                 )
@@ -340,11 +326,7 @@ impl Stub {
         let mut yubikey = match open_by_serial(self.serial) {
             Ok(yk) => yk,
             Err(yubikey::Error::NotFound) => {
-                let mut message = i18n_embed_fl::fl!(
-                    crate::LANGUAGE_LOADER,
-                    "plugin-insert-yk",
-                    yubikey_serial = self.serial.to_string(),
-                );
+                let mut message = fl!("plugin-insert-yk", yubikey_serial = self.serial.to_string());
 
                 // If the `confirm` command is available, we loop until either the YubiKey
                 // we want is inserted, or the used explicitly skips.
@@ -365,8 +347,7 @@ impl Stub {
                             Err(_) => {
                                 return Ok(Err(identity::Error::Identity {
                                     index: self.identity_index,
-                                    message: i18n_embed_fl::fl!(
-                                        crate::LANGUAGE_LOADER,
+                                    message: fl!(
                                         "plugin-err-yk-opening",
                                         yubikey_serial = self.serial.to_string(),
                                     ),
@@ -377,8 +358,7 @@ impl Stub {
                         Err(age_core::plugin::Error::Fail) => {
                             return Ok(Err(identity::Error::Identity {
                                 index: self.identity_index,
-                                message: i18n_embed_fl::fl!(
-                                    crate::LANGUAGE_LOADER,
+                                message: fl!(
                                     "plugin-err-yk-opening",
                                     yubikey_serial = self.serial.to_string(),
                                 ),
@@ -388,8 +368,7 @@ impl Stub {
 
                     // We're going to loop around, meaning that the first attempt failed.
                     // Change the message to indicate this to the user.
-                    message = i18n_embed_fl::fl!(
-                        crate::LANGUAGE_LOADER,
+                    message = fl!(
                         "plugin-insert-yk-retry",
                         yubikey_serial = self.serial.to_string(),
                     );
@@ -402,8 +381,7 @@ impl Stub {
                     if callbacks.message(&message)?.is_err() {
                         return Ok(Err(identity::Error::Identity {
                             index: self.identity_index,
-                            message: i18n_embed_fl::fl!(
-                                crate::LANGUAGE_LOADER,
+                            message: fl!(
                                 "plugin-err-yk-not-found",
                                 yubikey_serial = self.serial.to_string(),
                             ),
@@ -419,8 +397,7 @@ impl Stub {
                             Err(_) => {
                                 return Ok(Err(identity::Error::Identity {
                                     index: self.identity_index,
-                                    message: i18n_embed_fl::fl!(
-                                        crate::LANGUAGE_LOADER,
+                                    message: fl!(
                                         "plugin-err-yk-opening",
                                         yubikey_serial = self.serial.to_string(),
                                     ),
@@ -432,8 +409,7 @@ impl Stub {
                             Ok(end) if end >= FIFTEEN_SECONDS => {
                                 return Ok(Err(identity::Error::Identity {
                                     index: self.identity_index,
-                                    message: i18n_embed_fl::fl!(
-                                        crate::LANGUAGE_LOADER,
+                                    message: fl!(
                                         "plugin-err-yk-timed-out",
                                         yubikey_serial = self.serial.to_string(),
                                     ),
@@ -447,8 +423,7 @@ impl Stub {
             Err(_) => {
                 return Ok(Err(identity::Error::Identity {
                     index: self.identity_index,
-                    message: i18n_embed_fl::fl!(
-                        crate::LANGUAGE_LOADER,
+                    message: fl!(
                         "plugin-err-yk-opening",
                         yubikey_serial = self.serial.to_string(),
                     ),
@@ -527,8 +502,7 @@ impl Connection {
         // The policy requires a PIN, so request it.
         // Note that we can't distinguish between PinPolicy::Once and PinPolicy::Always
         // because this plugin is ephemeral, so we always request the PIN.
-        let enter_pin_msg = i18n_embed_fl::fl!(
-            crate::LANGUAGE_LOADER,
+        let enter_pin_msg = fl!(
             "plugin-enter-pin",
             yubikey_serial = self.yubikey.serial().to_string(),
         );
@@ -554,8 +528,7 @@ impl Connection {
                 Err(_) => {
                     return Ok(Err(identity::Error::Identity {
                         index: self.identity_index,
-                        message: i18n_embed_fl::fl!(
-                            crate::LANGUAGE_LOADER,
+                        message: fl!(
                             "plugin-err-pin-required",
                             yubikey_serial = self.yubikey.serial().to_string(),
                         ),

@@ -72,6 +72,9 @@ macro_rules! fl {
     ($message_id:literal) => {{
         i18n_embed_fl::fl!($crate::LANGUAGE_LOADER, $message_id)
     }};
+    ($message_id:literal, $($kwarg:expr),* $(,)*) => {{
+        i18n_embed_fl::fl!($crate::LANGUAGE_LOADER, $message_id, $($kwarg,)*)
+    }};
 }
 
 #[derive(Debug, Options)]
@@ -264,15 +267,7 @@ fn print_multiple(
         println!();
     }
     if printed > 1 {
-        eprintln!(
-            "{}",
-            i18n_embed_fl::fl!(
-                LANGUAGE_LOADER,
-                "printed-multiple",
-                kind = kind,
-                count = printed,
-            )
-        );
+        eprintln!("{}", fl!("printed-multiple", kind = kind, count = printed));
     }
 
     Ok(())
@@ -378,8 +373,7 @@ fn main() -> Result<(), Error> {
 
         eprintln!(
             "{}",
-            i18n_embed_fl::fl!(
-                LANGUAGE_LOADER,
+            fl!(
                 "cli-setup-intro",
                 generate_usage = "age-plugin-yubikey --generate",
             )
@@ -398,8 +392,7 @@ fn main() -> Result<(), Error> {
             .iter()
             .map(|reader| {
                 key::open_connection(reader).map(|yk| {
-                    i18n_embed_fl::fl!(
-                        LANGUAGE_LOADER,
+                    fl!(
                         "cli-setup-yk-name",
                         yubikey_name = reader.name(),
                         yubikey_serial = yk.serial().to_string(),
@@ -448,20 +441,13 @@ fn main() -> Result<(), Error> {
                 let i = i + 1;
 
                 match occupied {
-                    Some(Some(name)) => i18n_embed_fl::fl!(
-                        LANGUAGE_LOADER,
+                    Some(Some(name)) => fl!(
                         "cli-setup-slot-usable",
                         slot_index = i,
                         slot_name = name.as_str(),
                     ),
-                    Some(None) => i18n_embed_fl::fl!(
-                        LANGUAGE_LOADER,
-                        "cli-setup-slot-unusable",
-                        slot_index = i,
-                    ),
-                    None => {
-                        i18n_embed_fl::fl!(LANGUAGE_LOADER, "cli-setup-slot-empty", slot_index = i)
-                    }
+                    Some(None) => fl!("cli-setup-slot-unusable", slot_index = i),
+                    None => fl!("cli-setup-slot-empty", slot_index = i),
                 }
             })
             .collect();
@@ -489,11 +475,7 @@ fn main() -> Result<(), Error> {
                     .expect("We checked this above");
 
                 if Confirm::new()
-                    .with_prompt(i18n_embed_fl::fl!(
-                        LANGUAGE_LOADER,
-                        "cli-setup-use-existing",
-                        slot_index = slot_index,
-                    ))
+                    .with_prompt(fl!("cli-setup-use-existing", slot_index = slot_index))
                     .interact()?
                 {
                     let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
@@ -565,11 +547,7 @@ fn main() -> Result<(), Error> {
                 };
 
                 if Confirm::new()
-                    .with_prompt(i18n_embed_fl::fl!(
-                        LANGUAGE_LOADER,
-                        "cli-setup-generate-new",
-                        slot_index = slot_index,
-                    ))
+                    .with_prompt(fl!("cli-setup-generate-new", slot_index = slot_index))
                     .interact()?
                 {
                     eprintln!();
@@ -621,8 +599,7 @@ fn main() -> Result<(), Error> {
         writeln!(
             file,
             "{}",
-            i18n_embed_fl::fl!(
-                LANGUAGE_LOADER,
+            fl!(
                 "yubikey-identity",
                 yubikey_metadata = metadata.to_string(),
                 recipient = recipient.to_string(),
@@ -657,8 +634,7 @@ fn main() -> Result<(), Error> {
         eprintln!();
         eprintln!(
             "{}",
-            i18n_embed_fl::fl!(
-                LANGUAGE_LOADER,
+            fl!(
                 "cli-setup-finished",
                 is_new = if is_new { "true" } else { "false" },
                 recipient = recipient.to_string(),

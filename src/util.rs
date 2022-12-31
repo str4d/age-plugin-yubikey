@@ -180,8 +180,7 @@ impl fmt::Display for Metadata {
         write!(
             f,
             "{}",
-            i18n_embed_fl::fl!(
-                crate::LANGUAGE_LOADER,
+            fl!(
                 "yubikey-metadata",
                 serial = self.serial.to_string(),
                 slot = slot_to_ui(&self.slot),
@@ -197,20 +196,13 @@ impl fmt::Display for Metadata {
 pub(crate) fn print_identity(stub: Stub, recipient: Recipient, metadata: Metadata) {
     let recipient = recipient.to_string();
     if !console::user_attended() {
-        eprintln!(
-            "{}",
-            i18n_embed_fl::fl!(
-                crate::LANGUAGE_LOADER,
-                "print-recipient",
-                recipient = recipient.as_str(),
-            )
-        );
+        let recipient = recipient.as_str();
+        eprintln!("{}", fl!("print-recipient", recipient = recipient));
     }
 
     println!(
         "{}",
-        i18n_embed_fl::fl!(
-            crate::LANGUAGE_LOADER,
+        fl!(
             "yubikey-identity",
             yubikey_metadata = metadata.to_string(),
             recipient = recipient,
