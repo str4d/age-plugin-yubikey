@@ -286,7 +286,7 @@ fn list(flags: PluginFlags, all: bool) -> Result<(), Error> {
         all,
         |_, recipient, metadata| {
             println!("{}", metadata);
-            println!("{}", recipient.to_string());
+            println!("{}", recipient);
         },
     )
 }
@@ -372,6 +372,7 @@ fn main() -> Result<(), Error> {
             .with_prompt(fl!("cli-setup-select-yk"))
             .items(&reader_names)
             .default(0)
+            .report(true)
             .interact_opt()?
         {
             Some(yk) => readers_list[yk].open()?,
@@ -393,7 +394,11 @@ fn main() -> Result<(), Error> {
                                 x509_parser::parse_x509_certificate(key.certificate().as_ref())
                                     .unwrap();
                             let (name, _) = util::extract_name(&cert, true).unwrap();
-                            let created = cert.validity().not_before.to_rfc2822();
+                            let created = cert
+                                .validity()
+                                .not_before
+                                .to_rfc2822()
+                                .unwrap_or_else(|e| format!("Invalid date: {}", e));
 
                             format!("{}, created: {}", name, created)
                         })
@@ -426,6 +431,7 @@ fn main() -> Result<(), Error> {
                     .with_prompt(fl!("cli-setup-select-slot"))
                     .items(&slots)
                     .default(0)
+                    .report(true)
                     .interact_opt()?
                 {
                     Some(slot) => {
@@ -443,6 +449,7 @@ fn main() -> Result<(), Error> {
 
                 if Confirm::new()
                     .with_prompt(fl!("cli-setup-use-existing", slot_index = slot_index))
+                    .report(true)
                     .interact()?
                 {
                     let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
@@ -462,6 +469,7 @@ fn main() -> Result<(), Error> {
                         flags.name.as_deref().unwrap_or("age identity TAG_HEX")
                     ))
                     .allow_empty(true)
+                    .report(true)
                     .interact_text()?;
 
                 let pin_policy = match Select::new()
@@ -479,6 +487,7 @@ fn main() -> Result<(), Error> {
                             })
                             .unwrap(),
                     )
+                    .report(true)
                     .interact_opt()?
                 {
                     Some(0) => PinPolicy::Always,
@@ -503,6 +512,7 @@ fn main() -> Result<(), Error> {
                             })
                             .unwrap(),
                     )
+                    .report(true)
                     .interact_opt()?
                 {
                     Some(0) => TouchPolicy::Always,
@@ -514,6 +524,7 @@ fn main() -> Result<(), Error> {
 
                 if Confirm::new()
                     .with_prompt(fl!("cli-setup-generate-new", slot_index = slot_index))
+                    .report(true)
                     .interact()?
                 {
                     eprintln!();
@@ -541,6 +552,7 @@ fn main() -> Result<(), Error> {
                 "age-yubikey-identity-{}.txt",
                 hex::encode(stub.tag)
             ))
+            .report(true)
             .interact_text()?;
 
         let mut file = match OpenOptions::new()
@@ -552,6 +564,7 @@ fn main() -> Result<(), Error> {
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
                 if Confirm::new()
                     .with_prompt(fl!("cli-setup-identity-file-exists"))
+                    .report(true)
                     .interact()?
                 {
                     File::create(&file_name)?
