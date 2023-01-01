@@ -1,7 +1,7 @@
 [package]
 name = "age-plugin-yubikey"
 description = "YubiKey plugin for age clients"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Jack Grigg <thestr4d@gmail.com>"]
 repository = "https://github.com/str4d/age-plugin-yubikey"
 readme = "README.md"
