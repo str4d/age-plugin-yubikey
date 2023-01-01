@@ -18,7 +18,7 @@ use yubikey::{
     certificate::Certificate,
     piv::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
     reader::{Context, Reader},
-    MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
+    Key, MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
 use crate::{
@@ -39,21 +39,16 @@ pub(crate) fn is_connected(reader: Reader) -> bool {
 
 pub(crate) fn filter_connected(reader: &Reader) -> bool {
     match reader.open() {
-        Ok(_) => true,
-        Err(e) => {
-            use std::error::Error;
-            if let Some(pcsc::Error::RemovedCard) =
-                e.source().and_then(|inner| inner.downcast_ref())
-            {
-                warn!(
-                    "{}",
-                    fl!("warn-yk-not-connected", yubikey_name = reader.name())
-                );
-                false
-            } else {
-                true
-            }
+        Err(yubikey::Error::PcscError {
+            inner: Some(pcsc::Error::RemovedCard),
+        }) => {
+            warn!(
+                "{}",
+                fl!("warn-yk-not-connected", yubikey_name = reader.name())
+            );
+            false
         }
+        _ => true,
     }
 }
 
@@ -303,6 +298,32 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
     Ok(())
 }
 
+/// Returns an iterator of keys that are occupying plugin-compatible slots, along with the
+/// corresponding recipient if the key is compatible with this plugin.
+pub(crate) fn list_slots(
+    yubikey: &mut YubiKey,
+) -> Result<impl Iterator<Item = (Key, RetiredSlotId, Option<Recipient>)>, Error> {
+    Ok(Key::list(yubikey)?.into_iter().filter_map(|key| {
+        // We only use the retired slots.
+        match key.slot() {
+            SlotId::Retired(slot) => {
+                // Only P-256 keys are compatible with us.
+                let recipient = Recipient::from_certificate(key.certificate());
+                Some((key, slot, recipient))
+            }
+            _ => None,
+        }
+    }))
+}
+
+/// Returns an iterator of keys that are compatible with this plugin.
+pub(crate) fn list_compatible(
+    yubikey: &mut YubiKey,
+) -> Result<impl Iterator<Item = (Key, RetiredSlotId, Recipient)>, Error> {
+    list_slots(yubikey)
+        .map(|iter| iter.filter_map(|(key, slot, res)| res.map(|recipient| (key, slot, recipient))))
+}
+
 /// A reference to an age key stored in a YubiKey.
 #[derive(Debug)]
 pub struct Stub {
@@ -542,9 +563,8 @@ impl Connection {
     ) -> io::Result<Result<(), identity::Error>> {
         // Check if we can skip requesting a PIN.
         if self.cached_metadata.is_none() {
-            let (_, cert) = x509_parser::parse_x509_certificate(self.cert.as_ref()).unwrap();
             self.cached_metadata =
-                match Metadata::extract(&mut self.yubikey, self.slot, &cert, true) {
+                match Metadata::extract(&mut self.yubikey, self.slot, &self.cert, true) {
                     None => {
                         return Ok(Err(identity::Error::Identity {
                             index: self.identity_index,

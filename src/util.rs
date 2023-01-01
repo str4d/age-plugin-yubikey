@@ -4,7 +4,7 @@ use std::iter;
 use x509_parser::{certificate::X509Certificate, der_parser::oid::Oid};
 use yubikey::{
     piv::{RetiredSlotId, SlotId},
-    PinPolicy, Serial, TouchPolicy, YubiKey,
+    Certificate, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
 use crate::fl;
@@ -112,9 +112,11 @@ impl Metadata {
     pub(crate) fn extract(
         yubikey: &mut YubiKey,
         slot: RetiredSlotId,
-        cert: &X509Certificate,
+        cert: &Certificate,
         all: bool,
     ) -> Option<Self> {
+        let (_, cert) = x509_parser::parse_x509_certificate(cert.as_ref()).ok()?;
+
         // We store the PIN and touch policies for identities in their certificates
         // using the same certificate extension as PIV attestations.
         // https://developers.yubico.com/PIV/Introduction/PIV_attestation.html
@@ -143,10 +145,10 @@ impl Metadata {
                 .unwrap_or((None, None))
         };
 
-        extract_name(cert, all)
+        extract_name(&cert, all)
             .map(|(name, ours)| {
                 if ours {
-                    let (pin_policy, touch_policy) = policies(cert);
+                    let (pin_policy, touch_policy) = policies(&cert);
                     (name, pin_policy, touch_policy)
                 } else {
                     // We can extract the PIN and touch policies via an attestation. This
