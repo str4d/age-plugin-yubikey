@@ -39,21 +39,16 @@ pub(crate) fn is_connected(reader: Reader) -> bool {
 
 pub(crate) fn filter_connected(reader: &Reader) -> bool {
     match reader.open() {
-        Ok(_) => true,
-        Err(e) => {
-            use std::error::Error;
-            if let Some(pcsc::Error::RemovedCard) =
-                e.source().and_then(|inner| inner.downcast_ref())
-            {
-                warn!(
-                    "{}",
-                    fl!("warn-yk-not-connected", yubikey_name = reader.name())
-                );
-                false
-            } else {
-                true
-            }
+        Err(yubikey::Error::PcscError {
+            inner: Some(pcsc::Error::RemovedCard),
+        }) => {
+            warn!(
+                "{}",
+                fl!("warn-yk-not-connected", yubikey_name = reader.name())
+            );
+            false
         }
+        _ => true,
     }
 }
 
