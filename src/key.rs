@@ -8,7 +8,7 @@ use age_core::{
 use age_plugin::{identity, Callbacks};
 use bech32::{ToBase32, Variant};
 use dialoguer::Password;
-use log::{debug, warn};
+use log::{debug, error, warn};
 use std::fmt;
 use std::io;
 use std::iter;
@@ -73,37 +73,54 @@ pub(crate) fn wait_for_readers() -> Result<Context, Error> {
     }
 }
 
-/// Stops `scdaemon` if it is running.
+/// Looks for agent processes that might be holding exclusive access to a YubiKey, and
+/// asks them as nicely as possible to release it.
 ///
-/// Returns `true` if `scdaemon` was running and was successfully interrupted (or killed
-/// if the platform doesn't support interrupts).
-fn stop_scdaemon() -> bool {
-    debug!("Sharing violation encountered, looking for scdaemon processes to stop");
+/// Returns `true` if any known agent was running and was successfully interrupted (or
+/// killed if the platform doesn't support interrupts).
+fn hunt_agents() -> bool {
+    debug!("Sharing violation encountered, looking for agent processes");
 
-    use sysinfo::{
-        Process, ProcessExt, ProcessRefreshKind, RefreshKind, Signal, System, SystemExt,
-    };
+    use sysinfo::{ProcessExt, ProcessRefreshKind, RefreshKind, Signal, System, SystemExt};
 
     let mut interrupted = false;
 
     let sys =
         System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
 
-    for process in sys
-        .processes()
-        .values()
-        .filter(|val: &&Process| ["scdaemon", "scdaemon.exe"].contains(&val.name()))
-    {
-        if process
-            .kill_with(Signal::Interrupt)
-            .unwrap_or_else(|| process.kill())
-        {
-            debug!("Stopped scdaemon (PID {})", process.pid());
-            interrupted = true;
+    for process in sys.processes().values() {
+        match process.name() {
+            "scdaemon" | "scdaemon.exe" => {
+                // gpg-agent runs scdaemon to interact with smart cards. The canonical way
+                // to reload it is `gpgconf --reload scdaemon`, which kills and restarts
+                // the process. We emulate that here with SIGINT (which it listens to).
+                if process
+                    .kill_with(Signal::Interrupt)
+                    .unwrap_or_else(|| process.kill())
+                {
+                    debug!("Stopped scdaemon (PID {})", process.pid());
+                    interrupted = true;
+                }
+            }
+            "yubikey-agent" | "yubikey-agent.exe" => {
+                // yubikey-agent releases all YubiKey locks when it receives a SIGHUP.
+                match process.kill_with(Signal::Hangup) {
+                    Some(true) => {
+                        debug!("Sent SIGHUP to yubikey-agent (PID {})", process.pid());
+                        interrupted = true;
+                    }
+                    Some(false) => (),
+                    None => debug!(
+                        "Found yubikey-agent (PID {}) but platform doesn't support SIGHUP",
+                        process.pid(),
+                    ),
+                }
+            }
+            _ => (),
         }
     }
 
-    // If we did interrupt `scdaemon`, pause briefly to allow it to exit.
+    // If we did interrupt an agent, pause briefly to allow it to finish up.
     if interrupted {
         sleep(Duration::from_millis(100));
     }
@@ -117,7 +134,7 @@ fn open_sesame(
     op().or_else(|e| match e {
         yubikey::Error::PcscError {
             inner: Some(pcsc::Error::SharingViolation),
-        } if stop_scdaemon() => op(),
+        } if hunt_agents() => op(),
         _ => Err(e),
     })
 }
@@ -125,7 +142,7 @@ fn open_sesame(
 /// Opens a connection to this reader, returning a `YubiKey` if successful.
 ///
 /// This is equivalent to [`Reader::open`], but additionally handles the presence of
-/// `scdaemon` (which can indefinitely hold exclusive access to a YubiKey).
+/// agents (which can indefinitely hold exclusive access to a YubiKey).
 pub(crate) fn open_connection(reader: &Reader) -> Result<YubiKey, yubikey::Error> {
     open_sesame(|| reader.open())
 }
@@ -133,9 +150,51 @@ pub(crate) fn open_connection(reader: &Reader) -> Result<YubiKey, yubikey::Error
 /// Opens a YubiKey with a specific serial number.
 ///
 /// This is equivalent to [`YubiKey::open_by_serial`], but additionally handles the
-/// presence of `scdaemon` (which can indefinitely hold exclusive access to a YubiKey).
+/// presence of agents (which can indefinitely hold exclusive access to a YubiKey).
 fn open_by_serial(serial: Serial) -> Result<YubiKey, yubikey::Error> {
-    open_sesame(|| YubiKey::open_by_serial(serial))
+    // `YubiKey::open_by_serial` has a bug where it ignores all opening errors, even if
+    // it potentially could have found a matching YubiKey if not for an error, and thus
+    // returns `Error::NotFound` if another agent is holding exclusive access to the
+    // required YubiKey. This gives misleading UX behaviour where age-plugin-yubikey asks
+    // the user to insert a YubiKey they have already inserted.
+    //
+    // For now, we instead implement the correct behaviour manually. Once MSRV has been
+    // raised to 1.60, we can upstream this into the `yubikey` crate.
+    open_sesame(|| {
+        let mut readers = Context::open()?;
+
+        let mut open_error = None;
+
+        for reader in readers.iter()? {
+            let yubikey = match reader.open() {
+                Ok(yk) => yk,
+                Err(e) => {
+                    // Save the first error we see that indicates we might have been able
+                    // to find a matching YubiKey.
+                    if open_error.is_none() {
+                        if let yubikey::Error::PcscError {
+                            inner: Some(pcsc::Error::SharingViolation),
+                        } = e
+                        {
+                            open_error = Some(e);
+                        }
+                    }
+                    continue;
+                }
+            };
+
+            if serial == yubikey.serial() {
+                return Ok(yubikey);
+            }
+        }
+
+        Err(if let Some(e) = open_error {
+            e
+        } else {
+            error!("no YubiKey detected with serial: {}", serial);
+            yubikey::Error::NotFound
+        })
+    })
 }
 
 pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {

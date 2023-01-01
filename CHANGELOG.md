@@ -7,6 +7,13 @@ and this project adheres to Rust's notion of
 to 0.3.0 are beta releases.
 
 ## [Unreleased]
+### Changed
+- The "sharing violation" logic now also sends SIGHUP to any `yubikey-agent`
+  that is running, to have them release any YubiKey locks they are holding.
+
+### Fixed
+- The "sharing violation" logic now runs during plugin mode as intended. In the
+  previous release it only ran during direct `age-plugin-yubikey` usage.
 
 ## [0.3.1] - 2022-12-30
 ### Changed
