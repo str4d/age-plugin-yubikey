@@ -7,6 +7,8 @@ and this project adheres to Rust's notion of
 to 0.3.0 are beta releases.
 
 ## [Unreleased]
+
+## [0.3.2] - 2023-01-01
 ### Changed
 - The "sharing violation" logic now also sends SIGHUP to any `yubikey-agent`
   that is running, to have them release any YubiKey locks they are holding.
