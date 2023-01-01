@@ -204,6 +204,12 @@ rec-yk-no-service-pcscd =
     If you are on Debian or Ubuntu, you can install it with:
     {"  "}{$apt}
 
+rec-yk-no-service-pcscd-bsd =
+    You can install and run it as root with:
+    {"  "}{$pkg}
+    {"  "}{$service_enable}
+    {"  "}{$service_start}
+
 err-yk-no-service-win = The Smart Cards for Windows service is not running.
 rec-yk-no-service-win =
     See this troubleshooting guide for more help:
