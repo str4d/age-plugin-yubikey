@@ -107,6 +107,30 @@ impl fmt::Debug for Error {
                         wlnfl!(f, "err-yk-no-service-macos")?;
                         let url = "https://apple.stackexchange.com/a/438198";
                         wlnfl!(f, "rec-yk-no-service-macos", url = url)?;
+                    } else if cfg!(target_os = "openbsd") {
+                        wlnfl!(f, "err-yk-no-service-pcscd")?;
+                        let pkg = "pkg_add pcsc-lite";
+                        let service_enable = "rcctl enable pcscd";
+                        let service_start = "rcctl start pcscd";
+                        wlnfl!(
+                            f,
+                            "rec-yk-no-service-pcscd-bsd",
+                            pkg = pkg,
+                            service_enable = service_enable,
+                            service_start = service_start
+                        )?;
+                    } else if cfg!(target_os = "freebsd") {
+                        wlnfl!(f, "err-yk-no-service-pcscd")?;
+                        let pkg = "pkg install pcsc-lite";
+                        let service_enable = "service pcscd enable";
+                        let service_start = "service pcscd start";
+                        wlnfl!(
+                            f,
+                            "rec-yk-no-service-pcscd-bsd",
+                            pkg = pkg,
+                            service_enable = service_enable,
+                            service_start = service_start
+                        )?;
                     } else {
                         wlnfl!(f, "err-yk-no-service-pcscd")?;
                         let apt = "sudo apt-get install pcscd";
