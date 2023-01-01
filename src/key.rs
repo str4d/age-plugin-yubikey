@@ -8,7 +8,7 @@ use age_core::{
 use age_plugin::{identity, Callbacks};
 use bech32::{ToBase32, Variant};
 use dialoguer::Password;
-use log::{debug, warn};
+use log::{debug, error, warn};
 use std::fmt;
 use std::io;
 use std::iter;
@@ -156,7 +156,49 @@ pub(crate) fn open_connection(reader: &Reader) -> Result<YubiKey, yubikey::Error
 /// This is equivalent to [`YubiKey::open_by_serial`], but additionally handles the
 /// presence of agents (which can indefinitely hold exclusive access to a YubiKey).
 fn open_by_serial(serial: Serial) -> Result<YubiKey, yubikey::Error> {
-    open_sesame(|| YubiKey::open_by_serial(serial))
+    // `YubiKey::open_by_serial` has a bug where it ignores all opening errors, even if
+    // it potentially could have found a matching YubiKey if not for an error, and thus
+    // returns `Error::NotFound` if another agent is holding exclusive access to the
+    // required YubiKey. This gives misleading UX behaviour where age-plugin-yubikey asks
+    // the user to insert a YubiKey they have already inserted.
+    //
+    // For now, we instead implement the correct behaviour manually. Once MSRV has been
+    // raised to 1.60, we can upstream this into the `yubikey` crate.
+    open_sesame(|| {
+        let mut readers = Context::open()?;
+
+        let mut open_error = None;
+
+        for reader in readers.iter()? {
+            let yubikey = match reader.open() {
+                Ok(yk) => yk,
+                Err(e) => {
+                    // Save the first error we see that indicates we might have been able
+                    // to find a matching YubiKey.
+                    if open_error.is_none() {
+                        if let yubikey::Error::PcscError {
+                            inner: Some(pcsc::Error::SharingViolation),
+                        } = e
+                        {
+                            open_error = Some(e);
+                        }
+                    }
+                    continue;
+                }
+            };
+
+            if serial == yubikey.serial() {
+                return Ok(yubikey);
+            }
+        }
+
+        Err(if let Some(e) = open_error {
+            e
+        } else {
+            error!("no YubiKey detected with serial: {}", serial);
+            yubikey::Error::NotFound
+        })
+    })
 }
 
 pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
