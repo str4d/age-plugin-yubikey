@@ -592,13 +592,13 @@ impl Connection {
                     metadata => metadata,
                 };
         }
-        if let Some(PinPolicy::Never) = self.cached_metadata.as_ref().and_then(|m| m.pin_policy) {
-            return Ok(Ok(()));
+        match self.cached_metadata.as_ref().and_then(|m| m.pin_policy) {
+            Some(PinPolicy::Never) => return Ok(Ok(())),
+            Some(PinPolicy::Once) if self.yubikey.verify_pin(&[]).is_ok() => return Ok(Ok(())),
+            _ => (),
         }
 
         // The policy requires a PIN, so request it.
-        // Note that we can't distinguish between PinPolicy::Once and PinPolicy::Always
-        // because this plugin is ephemeral, so we always request the PIN.
         let enter_pin_msg = fl!(
             "plugin-enter-pin",
             yubikey_serial = self.yubikey.serial().to_string(),
