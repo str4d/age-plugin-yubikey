@@ -181,6 +181,13 @@ fn generate(flags: PluginFlags) -> Result<(), Error> {
 
     util::print_identity(stub, recipient, metadata);
 
+    // We have written to the YubiKey, which means we've authenticated with the management
+    // key. Out of an abundance of caution, we let the YubiKey be reset on disconnect,
+    // which will clear its PIN and touch caches. This has as small negative UX effect,
+    // but identity generation is a relatively infrequent occurrence, and users are more
+    // likely to see their cached PINs reset due to switching applets (e.g. from PIV to
+    // FIDO2).
+
     Ok(())
 }
 
@@ -199,6 +206,8 @@ fn print_single(
     let metadata = util::Metadata::extract(&mut yubikey, slot, key.certificate(), true).unwrap();
 
     printer(stub, recipient, metadata);
+
+    key::disconnect_without_reset(yubikey);
 
     Ok(())
 }
@@ -233,6 +242,8 @@ fn print_multiple(
             println!();
         }
         println!();
+
+        key::disconnect_without_reset(yubikey);
     }
     if printed > 1 {
         eprintln!("{}", fl!("printed-multiple", kind = kind, count = printed));
@@ -360,11 +371,13 @@ fn main() -> Result<(), Error> {
             .iter()
             .map(|reader| {
                 key::open_connection(reader).map(|yk| {
-                    fl!(
+                    let name = fl!(
                         "cli-setup-yk-name",
                         yubikey_name = reader.name(),
                         yubikey_serial = yk.serial().to_string(),
-                    )
+                    );
+                    key::disconnect_without_reset(yk);
+                    name
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -457,8 +470,10 @@ fn main() -> Result<(), Error> {
                         util::Metadata::extract(&mut yubikey, slot, key.certificate(), true)
                             .unwrap();
 
+                    key::disconnect_without_reset(yubikey);
                     ((stub, recipient, metadata), false)
                 } else {
+                    key::disconnect_without_reset(yubikey);
                     return Ok(());
                 }
             } else {
@@ -540,6 +555,7 @@ fn main() -> Result<(), Error> {
                         true,
                     )
                 } else {
+                    key::disconnect_without_reset(yubikey);
                     return Ok(());
                 }
             }

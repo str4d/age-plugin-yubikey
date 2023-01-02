@@ -249,6 +249,8 @@ impl IdentityPluginV1 for IdentityPlugin {
                     }
                 }
             }
+
+            conn.disconnect_without_reset();
         }
         Ok(file_keys)
     }

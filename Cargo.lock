@@ -2122,8 +2122,7 @@ dependencies = [
 [[package]]
 name = "yubikey"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10e6fa9476951a9b93d9a31aa5554b5bbac7aafdc5b23e663eb3f9b635c86053"
+source = "git+https://github.com/iqlusioninc/yubikey.rs.git?rev=1d33ea174791f699dfc0e6a06648aa3d9e066144#1d33ea174791f699dfc0e6a06648aa3d9e066144"
 dependencies = [
  "base16ct",
  "chrono",
