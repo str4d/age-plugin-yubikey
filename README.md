@@ -18,6 +18,14 @@ cargo install age-plugin-yubikey
 
 Help from new packagers is very welcome.
 
+### macOS
+
+You can install using Homebrew:
+
+```
+brew install age-plugin-yubikey
+```
+
 ### Linux, BSD, etc.
 
 On non-Windows, non-macOS systems, you need to ensure that the `pcscd` service
