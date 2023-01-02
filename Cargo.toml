@@ -53,6 +53,9 @@ sysinfo = "0.27"
 [dev-dependencies]
 flate2 = "1"
 man = "0.3"
+tempfile = "3"
+test-with = "0.9"
+which = "4"
 
 [patch.crates-io]
 yubikey = { git = "https://github.com/iqlusioninc/yubikey.rs.git", rev = "1d33ea174791f699dfc0e6a06648aa3d9e066144" }
