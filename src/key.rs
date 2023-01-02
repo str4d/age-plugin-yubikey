@@ -236,6 +236,23 @@ pub(crate) fn open(serial: Option<Serial>) -> Result<YubiKey, Error> {
     Ok(yubikey)
 }
 
+/// Disconnect from the YubiKey without resetting it.
+///
+/// This can be used to preserve the YubiKey's PIN and touch caches. There are two cases
+/// where we want to do this:
+///
+/// - We connected to this YubiKey in a read-only context, so we have not made any changes
+///   to the YubiKey's state. However, we might have asked an agent to release the YubiKey
+///   in `key::open_connection`, and we want to allow any state it may have left behind
+///   (such as cached PINs or touches) to persist beyond our execution, for usability.
+/// - We opened this connection in a decryption context, so the only changes to the
+///   YubiKey's state were to potentially cache the PIN and/or touch (depending on the
+///   policies of the slot). We want to allow these to persist beyond our execution, for
+///   usability.
+pub(crate) fn disconnect_without_reset(yubikey: YubiKey) {
+    let _ = yubikey.disconnect(pcsc::Disposition::LeaveCard);
+}
+
 pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
     const DEFAULT_PIN: &str = "123456";
     const DEFAULT_PUK: &str = "12345678";
@@ -575,13 +592,13 @@ impl Connection {
                     metadata => metadata,
                 };
         }
-        if let Some(PinPolicy::Never) = self.cached_metadata.as_ref().and_then(|m| m.pin_policy) {
-            return Ok(Ok(()));
+        match self.cached_metadata.as_ref().and_then(|m| m.pin_policy) {
+            Some(PinPolicy::Never) => return Ok(Ok(())),
+            Some(PinPolicy::Once) if self.yubikey.verify_pin(&[]).is_ok() => return Ok(Ok(())),
+            _ => (),
         }
 
         // The policy requires a PIN, so request it.
-        // Note that we can't distinguish between PinPolicy::Once and PinPolicy::Always
-        // because this plugin is ephemeral, so we always request the PIN.
         let enter_pin_msg = fl!(
             "plugin-enter-pin",
             yubikey_serial = self.yubikey.serial().to_string(),
@@ -673,6 +690,13 @@ impl Connection {
                 .into()),
             Err(_) => Err(()),
         }
+    }
+
+    /// Close this connection without resetting the YubiKey.
+    ///
+    /// This can be used to preserve the YubiKey's PIN and touch caches.
+    pub(crate) fn disconnect_without_reset(self) {
+        disconnect_without_reset(self.yubikey);
     }
 }
 

@@ -115,13 +115,24 @@ age client as normal (e.g. `rage -d -i yubikey-identity.txt`).
 ### Agent support
 
 `age-plugin-yubikey` does not provide or interact with an agent for decryption.
-As age plugin binaries have short lifetimes (they only run while the age client
-is running), this means that YubiKey identities configured with a PIN policy of
-`once` will actually prompt for the PIN on every decryption.
+It does however preserve the PIN cache by not soft-resetting the YubiKey after a
+decryption or read-only operation, which enables YubiKey identities configured
+with a PIN policy of `once` to not prompt for the PIN on every decryption.
 
-A decryption agent will most likely be implemented as a separate age plugin that
-interacts with [`yubikey-agent`](https://github.com/FiloSottile/yubikey-agent),
-enabling YubiKeys to be used simultaneously with age and SSH.
+The session that corresponds to the `once` policy can be ended in several ways,
+not all of which are necessarily intuitive:
+
+- Unplugging the YubiKey (the obvious way).
+- Using a different applet (e.g. FIDO2). This causes the PIV applet to be closed
+  which clears its state.
+- Generating a new age identity via `age-plugin-yubikey --generate` or the CLI
+  interface. This is to avoid leaving the YubiKey authenticated with the
+  management key.
+
+If the current PIN UX proves to be insufficient, a decryption agent will most
+likely be implemented as a separate age plugin that interacts with
+[`yubikey-agent`](https://github.com/FiloSottile/yubikey-agent), enabling
+YubiKeys to be used simultaneously with age and SSH.
 
 ### Manual setup and technical details
 
