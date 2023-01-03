@@ -1,3 +1,4 @@
+use dialoguer::Password;
 use rand::{rngs::OsRng, RngCore};
 use x509::RelativeDistinguishedName;
 use yubikey::{
@@ -8,6 +9,7 @@ use yubikey::{
 
 use crate::{
     error::Error,
+    fl,
     key::{self, Stub},
     p256::Recipient,
     util::{Metadata, POLICY_EXTENSION_OID},
@@ -86,16 +88,12 @@ impl IdentityBuilder {
         let pin_policy = self.pin_policy.unwrap_or(DEFAULT_PIN_POLICY);
         let touch_policy = self.touch_policy.unwrap_or(DEFAULT_TOUCH_POLICY);
 
+        eprintln!("{}", fl!("builder-gen-key"));
+
         // No need to ask for users to enter their PIN if the PIN policy requires it,
         // because here we _always_ require them to enter their PIN in order to access the
         // protected management key (which is necessary in order to generate identities).
         key::manage(yubikey)?;
-
-        if let TouchPolicy::Never = touch_policy {
-            // No need to touch YubiKey
-        } else {
-            eprintln!("👆 Please touch the YubiKey");
-        }
 
         // Generate a new key in the selected slot.
         let generated = yubikey_generate(
@@ -109,6 +107,9 @@ impl IdentityBuilder {
         let recipient = Recipient::from_spki(&generated).expect("YubiKey generates a valid pubkey");
         let stub = Stub::new(yubikey.serial(), slot, &recipient);
 
+        eprintln!();
+        eprintln!("{}", fl!("builder-gen-cert"));
+
         // Pick a random serial for the new self-signed certificate.
         let mut serial = [0; 20];
         OsRng.fill_bytes(&mut serial);
@@ -116,6 +117,23 @@ impl IdentityBuilder {
         let name = self
             .name
             .unwrap_or(format!("age identity {}", hex::encode(stub.tag)));
+
+        if let PinPolicy::Always = pin_policy {
+            // We need to enter the PIN again.
+            let pin = Password::new()
+                .with_prompt(fl!(
+                    "plugin-enter-pin",
+                    yubikey_serial = yubikey.serial().to_string(),
+                ))
+                .report(true)
+                .interact()?;
+            yubikey.verify_pin(pin.as_bytes())?;
+        }
+        if let TouchPolicy::Never = touch_policy {
+            // No need to touch YubiKey
+        } else {
+            eprintln!("{}", fl!("builder-touch-yk"));
+        }
 
         let cert = Certificate::generate_self_signed(
             yubikey,

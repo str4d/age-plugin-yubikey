@@ -20,6 +20,10 @@ to 0.3.0 are beta releases.
     `age-plugin-yubikey` won't request a PIN entry to decrypt a file with an
     identity that has a PIN policy of `once`.
 
+### Fixed
+- Identities can now be generated with a PIN policy of "always" (in previous
+  versions of `age-plugin-yubikey` this would cause an error).
+
 ## [0.3.2] - 2023-01-01
 ### Changed
 - The "sharing violation" logic now also sends SIGHUP to any `yubikey-agent`

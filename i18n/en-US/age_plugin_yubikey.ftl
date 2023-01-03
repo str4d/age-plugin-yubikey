@@ -144,6 +144,12 @@ mgr-changing-mgmt-key-error =
     {"  "}{$management_key}
 mgr-changing-mgmt-key-success = Success!
 
+## YubiKey keygen
+
+builder-gen-key  = 🎲 Generating key...
+builder-gen-cert = 🔏 Generating certificate...
+builder-touch-yk = 👆 Please touch the {-yubikey}
+
 ## Plugin usage
 
 plugin-err-invalid-recipient = Invalid recipient
