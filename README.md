@@ -31,10 +31,16 @@ brew install age-plugin-yubikey
 On non-Windows, non-macOS systems, you need to ensure that the `pcscd` service
 is installed and running. 
 
+You'll also need the related library in order to build the pcsc-sys dependency.
+Otherwise you'll have a build error saying: 
+```
+error: failed to run custom build command for `pcsc-sys v1.2.0`
+```
+
 #### Debian or Ubuntu
 
 ```
-$ sudo apt-get install pcscd
+$ sudo apt-get install pcscd libpcsclite-dev
 ```
 
 #### OpenBSD
