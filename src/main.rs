@@ -221,29 +221,30 @@ fn print_multiple(
     let mut readers = Context::open()?;
 
     let mut printed = 0;
-    for reader in readers.iter()?.filter(key::filter_connected) {
-        let mut yubikey = key::open_connection(&reader)?;
-        if let Some(serial) = serial {
-            if yubikey.serial() != serial {
-                continue;
+    for reader in readers.iter()? {
+        if let Ok(mut yubikey) = key::open_connection(&reader) {
+            if let Some(serial) = serial {
+                if yubikey.serial() != serial {
+                    continue;
+                }
             }
-        }
 
-        for (key, slot, recipient) in key::list_compatible(&mut yubikey)? {
-            let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
-            let metadata = match util::Metadata::extract(&mut yubikey, slot, key.certificate(), all)
-            {
-                Some(res) => res,
-                None => continue,
-            };
+            for (key, slot, recipient) in key::list_compatible(&mut yubikey)? {
+                let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
+                let metadata =
+                    match util::Metadata::extract(&mut yubikey, slot, key.certificate(), all) {
+                        Some(res) => res,
+                        None => continue,
+                    };
 
-            printer(stub, recipient, metadata);
-            printed += 1;
+                printer(stub, recipient, metadata);
+                printed += 1;
+                println!();
+            }
             println!();
-        }
-        println!();
 
-        key::disconnect_without_reset(yubikey);
+            key::disconnect_without_reset(yubikey);
+        }
     }
     if printed > 1 {
         eprintln!("{}", fl!("printed-multiple", kind = kind, count = printed));
