@@ -595,6 +595,7 @@ impl Connection {
         match self.cached_metadata.as_ref().and_then(|m| m.pin_policy) {
             Some(PinPolicy::Never) => return Ok(Ok(())),
             Some(PinPolicy::Once) if self.yubikey.verify_pin(&[]).is_ok() => return Ok(Ok(())),
+            Some(PinPolicy::Always) if self.yubikey.verify_pin(&[]).is_ok() => return Ok(Ok(())),
             _ => (),
         }
 
