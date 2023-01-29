@@ -41,7 +41,7 @@ pub(crate) fn is_connected(reader: Reader) -> bool {
 pub(crate) fn filter_connected(reader: &Reader) -> bool {
     match reader.open() {
         Err(yubikey::Error::PcscError {
-            inner: Some(pcsc::Error::RemovedCard),
+            inner: Some(pcsc::Error::NoSmartcard | pcsc::Error::RemovedCard),
         }) => {
             warn!(
                 "{}",
