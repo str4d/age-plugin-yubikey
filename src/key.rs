@@ -48,7 +48,13 @@ pub(crate) fn filter_connected(reader: &Reader) -> bool {
             );
             false
         }
-        _ => true,
+        Err(_) => true,
+        Ok(yubikey) => {
+            // We only connected as a side-effect of confirming that we can connect, so
+            // avoid resetting the YubiKey.
+            disconnect_without_reset(yubikey);
+            true
+        }
     }
 }
 
