@@ -17,7 +17,6 @@ pub enum Error {
     CustomManagementKey,
     InvalidFlagCommand(String, String),
     InvalidFlagTui(String),
-    InvalidPinLength,
     InvalidPinPolicy(String),
     InvalidSlot(u8),
     InvalidTouchPolicy(String),
@@ -63,7 +62,6 @@ impl fmt::Debug for Error {
                 command = command.as_str(),
             )?,
             Error::InvalidFlagTui(flag) => wlnfl!(f, "err-invalid-flag-tui", flag = flag.as_str())?,
-            Error::InvalidPinLength => wlnfl!(f, "err-invalid-pin-length")?,
             Error::InvalidPinPolicy(s) => wlnfl!(
                 f,
                 "err-invalid-pin-policy",
