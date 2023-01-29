@@ -186,6 +186,9 @@ fn open_by_serial(serial: Serial) -> Result<YubiKey, yubikey::Error> {
 
             if serial == yubikey.serial() {
                 return Ok(yubikey);
+            } else {
+                // We didn't want this YubiKey; don't reset it.
+                disconnect_without_reset(yubikey);
             }
         }
 
