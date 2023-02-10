@@ -115,6 +115,15 @@ normal (e.g. `rage -r age1yubikey1...`).
 The output of the `--list` command can also be used directly to encrypt files to
 all recipients (e.g. `age -R filename.txt`).
 
+For decryption, age needs to know that the secret key is accessible via this 
+plugin, and the plugin needs to know how to identify the key on the YubiKey. 
+This information is encoded in the key identity, that can be generated like 
+this:
+
+```
+$ age-plugin-yubikey -i > yubikey-identity.txt
+```
+
 To decrypt files encrypted to a YubiKey identity, pass the identity file to the
 age client as normal (e.g. `rage -d -i yubikey-identity.txt`).
 
