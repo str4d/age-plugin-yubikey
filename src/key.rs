@@ -284,20 +284,27 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
         let current_puk = Password::new()
             .with_prompt(fl!("mgr-enter-current-puk", default_puk = DEFAULT_PUK))
             .interact()?;
-        let new_pin = request_pin(
-            |prev_error| {
-                if let Some(err) = prev_error {
-                    eprintln!("{}", err);
-                }
-                Password::new()
-                    .with_prompt(fl!("mgr-choose-new-pin"))
-                    .with_confirmation(fl!("mgr-repeat-new-pin"), fl!("mgr-pin-mismatch"))
-                    .interact()
-                    .map(|pin| Result::<_, Infallible>::Ok(SecretString::new(pin)))
-            },
-            yubikey.serial(),
-        )?
-        .unwrap();
+        let new_pin = loop {
+            let pin = request_pin(
+                |prev_error| {
+                    if let Some(err) = prev_error {
+                        eprintln!("{}", err);
+                    }
+                    Password::new()
+                        .with_prompt(fl!("mgr-choose-new-pin"))
+                        .with_confirmation(fl!("mgr-repeat-new-pin"), fl!("mgr-pin-mismatch"))
+                        .interact()
+                        .map(|pin| Result::<_, Infallible>::Ok(SecretString::new(pin)))
+                },
+                yubikey.serial(),
+            )?
+            .unwrap();
+            if pin.expose_secret() == DEFAULT_PIN {
+                eprintln!("{}", fl!("mgr-nope-default-pin"));
+            } else {
+                break pin;
+            }
+        };
         let new_pin = new_pin.expose_secret();
         yubikey.change_puk(current_puk.as_bytes(), new_pin.as_bytes())?;
         yubikey.change_pin(pin.as_bytes(), new_pin.as_bytes())?;
