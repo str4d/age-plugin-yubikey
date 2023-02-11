@@ -487,29 +487,54 @@ fn main() -> Result<(), Error> {
                     .report(true)
                     .interact_text()?;
 
-                let pin_policy = match Select::new()
-                    .with_prompt(fl!("cli-setup-select-pin-policy"))
-                    .items(&[
-                        fl!("pin-policy-always"),
-                        fl!("pin-policy-once"),
-                        fl!("pin-policy-never"),
-                    ])
-                    .default(
-                        [PinPolicy::Always, PinPolicy::Once, PinPolicy::Never]
-                            .iter()
-                            .position(|p| {
-                                p == &flags.pin_policy.unwrap_or(builder::DEFAULT_PIN_POLICY)
-                            })
-                            .unwrap(),
-                    )
-                    .report(true)
-                    .interact_opt()?
-                {
-                    Some(0) => PinPolicy::Always,
-                    Some(1) => PinPolicy::Once,
-                    Some(2) => PinPolicy::Never,
-                    Some(_) => unreachable!(),
-                    None => return Ok(()),
+                let mut displayed_yk4_warning = false;
+                let pin_policy = loop {
+                    let pin_policy = match Select::new()
+                        .with_prompt(fl!("cli-setup-select-pin-policy"))
+                        .items(&[
+                            fl!("pin-policy-always"),
+                            fl!("pin-policy-once"),
+                            fl!("pin-policy-never"),
+                        ])
+                        .default(
+                            [PinPolicy::Always, PinPolicy::Once, PinPolicy::Never]
+                                .iter()
+                                .position(|p| {
+                                    p == &flags.pin_policy.unwrap_or(builder::DEFAULT_PIN_POLICY)
+                                })
+                                .unwrap(),
+                        )
+                        .report(true)
+                        .interact_opt()?
+                    {
+                        Some(0) => PinPolicy::Always,
+                        Some(1) => PinPolicy::Once,
+                        Some(2) => PinPolicy::Never,
+                        Some(_) => unreachable!(),
+                        None => return Ok(()),
+                    };
+
+                    // We can't preserve the PIN cache for YubiKey 4 series, because to
+                    // retrieve the serial we switch to the OTP applet.
+                    match (pin_policy, yubikey.version().major) {
+                        (PinPolicy::Once, 4) => {
+                            if !displayed_yk4_warning {
+                                eprintln!();
+                                eprintln!("{}", fl!("cli-setup-yk4-pin-policy"));
+                                eprintln!();
+                                displayed_yk4_warning = true;
+                            }
+
+                            if Confirm::new()
+                                .with_prompt(fl!("cli-setup-yk4-pin-policy-confirm"))
+                                .report(true)
+                                .interact()?
+                            {
+                                break pin_policy;
+                            }
+                        }
+                        _ => break pin_policy,
+                    }
                 };
 
                 let touch_policy = match Select::new()
