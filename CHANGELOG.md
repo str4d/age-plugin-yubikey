@@ -7,6 +7,8 @@ and this project adheres to Rust's notion of
 to 0.3.0 are beta releases.
 
 ## [Unreleased]
+
+## [0.3.3] - 2023-02-11
 ### Fixed
 - When `age-plugin-yubikey` assists the user in changing their PIN from the
   default PIN, it no longer tells the user that PINs shorter than 6 characters
