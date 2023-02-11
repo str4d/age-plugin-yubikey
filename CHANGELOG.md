@@ -11,6 +11,8 @@ to 0.3.0 are beta releases.
 - When `age-plugin-yubikey` assists the user in changing their PIN from the
   default PIN, it no longer tells the user that PINs shorter than 6 characters
   are allowed, and instead loops until the user enters a PIN of valid length.
+  It also now prevents the user from setting their PIN to the default PIN, to
+  avoid creating a cycle.
 - More kinds of SmartCard readers are ignored when they have no SmartCard
   inserted.
 

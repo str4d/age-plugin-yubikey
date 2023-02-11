@@ -135,6 +135,7 @@ mgr-enter-current-puk = Enter current PUK (default is {$default_puk})
 mgr-choose-new-pin    = Choose a new PIN/PUK
 mgr-repeat-new-pin    = Repeat the PIN/PUK
 mgr-pin-mismatch      = PINs don't match
+mgr-nope-default-pin  = You entered the default PIN again. You need to change it.
 
 mgr-changing-mgmt-key =
     ✨ Your {-yubikey} is using the default management key.
