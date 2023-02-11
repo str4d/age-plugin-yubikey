@@ -49,7 +49,13 @@ pub(crate) fn filter_connected(reader: &Reader) -> bool {
             );
             false
         }
-        _ => true,
+        Err(_) => true,
+        Ok(yubikey) => {
+            // We only connected as a side-effect of confirming that we can connect, so
+            // avoid resetting the YubiKey.
+            disconnect_without_reset(yubikey);
+            true
+        }
     }
 }
 
@@ -181,6 +187,9 @@ fn open_by_serial(serial: Serial) -> Result<YubiKey, yubikey::Error> {
 
             if serial == yubikey.serial() {
                 return Ok(yubikey);
+            } else {
+                // We didn't want this YubiKey; don't reset it.
+                disconnect_without_reset(yubikey);
             }
         }
 
