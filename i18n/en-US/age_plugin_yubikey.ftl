@@ -127,13 +127,15 @@ mgr-change-default-pin =
     ✨ Your {-yubikey} is using the default PIN. Let's change it!
     ✨ We'll also set the PUK equal to the PIN.
 
-    🔐 The PIN is up to 8 numbers, letters, or symbols. Not just numbers!
+    🔐 The PIN can be numbers, letters, or symbols. Not just numbers!
+    📏 The PIN must be at least 6 and at most 8 characters in length.
     ❌ Your keys will be lost if the PIN and PUK are locked after 3 incorrect tries.
 
 mgr-enter-current-puk = Enter current PUK (default is {$default_puk})
 mgr-choose-new-pin    = Choose a new PIN/PUK
 mgr-repeat-new-pin    = Repeat the PIN/PUK
 mgr-pin-mismatch      = PINs don't match
+mgr-nope-default-pin  = You entered the default PIN again. You need to change it.
 
 mgr-changing-mgmt-key =
     ✨ Your {-yubikey} is using the default management key.
@@ -186,7 +188,6 @@ rec-custom-mgmt-key =
 
 err-invalid-flag-command = Flag '{$flag}' cannot be used with '{$command}'.
 err-invalid-flag-tui     = Flag '{$flag}' cannot be used with the interactive interface.
-err-invalid-pin-length   = The PIN needs to be 1-8 characters.
 err-invalid-pin-policy   = Invalid PIN policy '{$policy}' (expected [{$expected}]).
 err-invalid-slot         = Invalid slot '{$slot}' (expected number between 1 and 20).
 err-invalid-touch-policy = Invalid touch policy '{$policy}' (expected [{$expected}]).
