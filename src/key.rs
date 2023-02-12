@@ -333,7 +333,13 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
             }
         };
         let new_pin = new_pin.expose_secret();
-        yubikey.change_puk(current_puk.as_bytes(), new_pin.as_bytes())?;
+        yubikey
+            .change_puk(current_puk.as_bytes(), new_pin.as_bytes())
+            .map_err(|e| match e {
+                yubikey::Error::PinLocked => Error::PukLocked,
+                yubikey::Error::WrongPin { tries } => Error::WrongPuk(tries),
+                _ => Error::YubiKey(e),
+            })?;
         yubikey.change_pin(pin.as_bytes(), new_pin.as_bytes())?;
     }
 
