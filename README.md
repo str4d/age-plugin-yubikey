@@ -42,7 +42,7 @@ $ sudo apt-get install pcscd
 As ```root``` do:
 
 ```
-$ pkg_add pcsc-lite
+$ pkg_add pcsc-lite ccid
 $ rcctl enable pcscd
 $ rcctl start pcscd
 ```
@@ -51,7 +51,7 @@ $ rcctl start pcscd
 
 As ```root``` do:
 ```
-$ pkg install pcsc-lite
+$ pkg install pcsc-lite libccid
 $ service pcscd enable
 $ service pcscd start
 ```
