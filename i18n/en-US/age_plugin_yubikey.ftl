@@ -223,9 +223,14 @@ rec-yk-no-service-win =
     {"  "}{$url}
 
 err-yk-not-found         = Please insert the {-yubikey} you want to set up
-err-yk-wrong-pin         = Invalid PIN ({$tries} tries remaining before it is blocked)
 err-yk-general           = Error while communicating with {-yubikey}: {$err}
 err-yk-general-cause     = Cause: {$inner_err}
+
+err-yk-wrong-pin = Invalid {$pin_kind} ({$tries ->
+    [one] {$tries} try remaining
+   *[other] {$tries} tries remaining
+} before it is blocked)
+err-yk-pin-locked = {$pin_kind} locked
 
 err-ux-A = Did this not do what you expected? Could an error be more useful?
 err-ux-B = Tell us

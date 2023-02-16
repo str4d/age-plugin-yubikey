@@ -25,10 +25,12 @@ pub enum Error {
     MultipleYubiKeys,
     NoEmptySlots(Serial),
     NoMatchingSerial(Serial),
+    PukLocked,
     SlotHasNoIdentity(RetiredSlotId),
     SlotIsNotEmpty(RetiredSlotId),
     TimedOut,
     UseListForSingleSlot,
+    WrongPuk(u8),
     YubiKey(yubikey::Error),
 }
 
@@ -84,6 +86,7 @@ impl fmt::Debug for Error {
             Error::NoMatchingSerial(serial) => {
                 wlnfl!(f, "err-no-matching-serial", serial = serial.to_string())?
             }
+            Error::PukLocked => wlnfl!(f, "err-yk-pin-locked", pin_kind = "PUK")?,
             Error::SlotHasNoIdentity(slot) => {
                 wlnfl!(f, "err-slot-has-no-identity", slot = slot_to_ui(slot))?
             }
@@ -92,6 +95,9 @@ impl fmt::Debug for Error {
             }
             Error::TimedOut => wlnfl!(f, "err-timed-out")?,
             Error::UseListForSingleSlot => wlnfl!(f, "err-use-list-for-single")?,
+            Error::WrongPuk(tries) => {
+                wlnfl!(f, "err-yk-wrong-pin", pin_kind = "PUK", tries = tries)?
+            }
             Error::YubiKey(e) => match e {
                 yubikey::Error::NotFound => wlnfl!(f, "err-yk-not-found")?,
                 yubikey::Error::PcscError {
@@ -135,7 +141,10 @@ impl fmt::Debug for Error {
                         wlnfl!(f, "rec-yk-no-service-pcscd", apt = apt)?;
                     }
                 }
-                yubikey::Error::WrongPin { tries } => wlnfl!(f, "err-yk-wrong-pin", tries = tries)?,
+                yubikey::Error::PinLocked => wlnfl!(f, "err-yk-pin-locked", pin_kind = "PIN")?,
+                yubikey::Error::WrongPin { tries } => {
+                    wlnfl!(f, "err-yk-wrong-pin", pin_kind = "PIN", tries = tries)?
+                }
                 e => {
                     wlnfl!(f, "err-yk-general", err = e.to_string())?;
                     use std::error::Error;
