@@ -123,9 +123,10 @@ age client as normal (e.g. `rage -d -i yubikey-identity.txt`).
 ### Agent support
 
 `age-plugin-yubikey` does not provide or interact with an agent for decryption.
-It does however preserve the PIN cache by not soft-resetting the YubiKey after a
-decryption or read-only operation, which enables YubiKey identities configured
-with a PIN policy of `once` to not prompt for the PIN on every decryption.
+It does however attempt to preserve the PIN cache by not soft-resetting the
+YubiKey after a decryption or read-only operation, which enables YubiKey
+identities configured with a PIN policy of `once` to not prompt for the PIN on
+every decryption. **This does not work for YubiKey 4 series.**
 
 The session that corresponds to the `once` policy can be ended in several ways,
 not all of which are necessarily intuitive:
@@ -133,6 +134,8 @@ not all of which are necessarily intuitive:
 - Unplugging the YubiKey (the obvious way).
 - Using a different applet (e.g. FIDO2). This causes the PIV applet to be closed
   which clears its state.
+  - This is why the YubiKey 4 series does not support PIN cache preservation:
+    their serial can only be obtained by switching to the OTP applet.
 - Generating a new age identity via `age-plugin-yubikey --generate` or the CLI
   interface. This is to avoid leaving the YubiKey authenticated with the
   management key.

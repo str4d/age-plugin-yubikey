@@ -76,6 +76,14 @@ cli-setup-name-identity       = 📛 Name this identity
 cli-setup-select-pin-policy   = 🔤 Select a PIN policy
 cli-setup-select-touch-policy = 👆 Select a touch policy
 
+cli-setup-yk4-pin-policy =
+    ⚠️ Your {-yubikey} is a {-yubikey} 4 series. With ephemeral applications like
+    {-age-plugin-yubikey}, a PIN policy of "Once" behaves like a PIN policy of
+    "Always", and your PIN will be requested for every decryption. However, you
+    might still benefit from a PIN policy of "Once" in long-running applications
+    like agents.
+cli-setup-yk4-pin-policy-confirm = Use PIN policy of "Once" with {-yubikey} 4?
+
 cli-setup-generate-new = Generate new identity in slot {$slot_index}?
 cli-setup-use-existing = Use existing identity in slot {$slot_index}?
 

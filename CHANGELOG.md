@@ -11,7 +11,7 @@ to 0.3.0 are beta releases.
 - MSRV is now 1.60.0.
 - The YubiKey PIV PIN and touch caches are now preserved across processes in
   most cases. See [README.md](README.md#agent-support) for exceptions. This has
-  several usability effects:
+  several usability effects (not applicable to YubiKey 4 series):
   - If a YubiKey's PIN is cached by an agent like `yubikey-agent`, and then
     `age-plugin-yubikey` is run (either directly or as a plugin), the agent
     won't request a PIN entry on its next use.
