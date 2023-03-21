@@ -1,0 +1,23 @@
+name: Beta lints
+
+# We only run these lints on trial-merges of PRs to reduce noise.
+on: pull_request
+
+jobs:
+  clippy-beta:
+    name: Clippy (beta)
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@beta
+        id: toolchain
+      - run: rustup override set ${{steps.toolchain.outputs.name}}
+      - name: Install build dependencies
+        run: sudo apt install libpcsclite-dev
+      - name: Clippy (beta)
+        uses: actions-rs/clippy-check@v1
+        with:
+          name: Clippy (beta)
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features --all-targets -- -W clippy::all
