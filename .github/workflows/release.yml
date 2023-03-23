@@ -87,7 +87,7 @@ jobs:
         if: matrix.name == 'windows'
 
       - name: Upload archive to release
-        uses: svenstaro/upload-release-action@2.4.0
+        uses: svenstaro/upload-release-action@2.5.0
         with:
           file: ${{ matrix.archive_name }}
           asset_name: age-plugin-yubikey-$tag-${{ matrix.asset_suffix }}
@@ -146,7 +146,7 @@ jobs:
           args: --package age-plugin-yubikey --no-build --target ${{ matrix.target }}
 
       - name: Upload Debian package to release
-        uses: svenstaro/upload-release-action@2.4.0
+        uses: svenstaro/upload-release-action@2.5.0
         with:
           file: target/${{ matrix.target }}/debian/*.deb
           file_glob: true
