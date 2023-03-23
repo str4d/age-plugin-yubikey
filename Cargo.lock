@@ -72,7 +72,7 @@ dependencies = [
  "rand",
  "rust-embed",
  "sha2",
- "sysinfo 0.27.8",
+ "sysinfo",
  "tempfile",
  "test-with",
  "which",
@@ -2217,21 +2217,6 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.27.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a902e9050fca0a5d6877550b769abd2bd1ce8c04634b941dbe2809735e1a1e33"
-dependencies = [
- "cfg-if",
- "core-foundation-sys",
- "libc",
- "ntapi",
- "once_cell",
- "rayon",
- "winapi",
-]
-
-[[package]]
-name = "sysinfo"
 version = "0.28.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f69e0d827cce279e61c2f3399eb789271a8f136d8245edef70f06e3c9601a670"
@@ -2282,7 +2267,7 @@ dependencies = [
  "regex",
  "reqwest",
  "syn 2.0.7",
- "sysinfo 0.28.3",
+ "sysinfo",
  "users",
  "which",
 ]
