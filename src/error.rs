@@ -113,7 +113,7 @@ impl fmt::Debug for Error {
                         wlnfl!(f, "rec-yk-no-service-macos", url = url)?;
                     } else if cfg!(target_os = "openbsd") {
                         wlnfl!(f, "err-yk-no-service-pcscd")?;
-                        let pkg = "pkg_add pcsc-lite";
+                        let pkg = "pkg_add pcsc-lite ccid";
                         let service_enable = "rcctl enable pcscd";
                         let service_start = "rcctl start pcscd";
                         wlnfl!(
@@ -125,7 +125,7 @@ impl fmt::Debug for Error {
                         )?;
                     } else if cfg!(target_os = "freebsd") {
                         wlnfl!(f, "err-yk-no-service-pcscd")?;
-                        let pkg = "pkg install pcsc-lite";
+                        let pkg = "pkg install pcsc-lite libccid";
                         let service_enable = "service pcscd enable";
                         let service_start = "service pcscd start";
                         wlnfl!(
