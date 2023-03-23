@@ -120,6 +120,7 @@ cli-setup-finished =
 open-yk-with-serial    = ⏳ Please insert the {-yubikey} with serial {$yubikey_serial}.
 open-yk-without-serial = ⏳ Please insert the {-yubikey}.
 warn-yk-not-connected  = Ignoring {$yubikey_name}: not connected
+warn-yk-missing-applet = Ignoring {$yubikey_name}: Missing {$applet_name} applet
 
 print-recipient = Recipient: {$recipient}
 

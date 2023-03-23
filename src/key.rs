@@ -49,6 +49,17 @@ pub(crate) fn filter_connected(reader: &Reader) -> bool {
             );
             false
         }
+        Err(yubikey::Error::AppletNotFound { applet_name }) => {
+            warn!(
+                "{}",
+                fl!(
+                    "warn-yk-missing-applet",
+                    yubikey_name = reader.name(),
+                    applet_name = applet_name,
+                ),
+            );
+            false
+        }
         Err(_) => true,
         Ok(yubikey) => {
             // We only connected as a side-effect of confirming that we can connect, so
