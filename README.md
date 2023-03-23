@@ -6,55 +6,26 @@ which enables files to be encrypted to age identities stored on YubiKeys.
 
 ## Installation
 
+| Environment | CLI command |
+|-------------|-------------|
+| Cargo (Rust 1.65+) | `cargo install age-plugin-yubikey` |
+| Homebrew (macOS or Linux) | `brew install age-plugin-yubikey` |
+
 On Windows, Linux, and macOS, you can use the
 [pre-built binaries](https://github.com/str4d/age-plugin-yubikey/releases).
 
-If your system has Rust 1.65+ installed (either via `rustup` or a system
-package), you can build directly from source:
-
-```
-cargo install age-plugin-yubikey
-```
-
 Help from new packagers is very welcome.
-
-### macOS
-
-You can install using Homebrew:
-
-```
-brew install age-plugin-yubikey
-```
 
 ### Linux, BSD, etc.
 
 On non-Windows, non-macOS systems, you need to ensure that the `pcscd` service
 is installed and running. 
 
-#### Debian or Ubuntu
-
-```
-$ sudo apt-get install pcscd
-```
-
-#### OpenBSD
-
-As ```root``` do:
-
-```
-$ pkg_add pcsc-lite ccid
-$ rcctl enable pcscd
-$ rcctl start pcscd
-```
-
-#### FreeBSD
-
-As ```root``` do:
-```
-$ pkg install pcsc-lite libccid
-$ service pcscd enable
-$ service pcscd start
-```
+| Environment | CLI command |
+|-------------|-------------|
+| Debian or Ubuntu | `sudo apt-get install pcscd` |
+| OpenBSD | As ```root``` do:<br>`pkg_add pcsc-lite ccid`<br>`rcctl enable pcscd`<br>`rcctl start pcscd` |
+| FreeBSD | As ```root``` do:<br>`pkg install pcsc-lite libccid`<br>`service pcscd enable`<br>`service pcscd start` |
 
 ### Windows Subsystem for Linux (WSL)
 
