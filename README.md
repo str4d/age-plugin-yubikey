@@ -27,6 +27,14 @@ is installed and running.
 | OpenBSD | As ```root``` do:<br>`pkg_add pcsc-lite ccid`<br>`rcctl enable pcscd`<br>`rcctl start pcscd` |
 | FreeBSD | As ```root``` do:<br>`pkg install pcsc-lite libccid`<br>`service pcscd enable`<br>`service pcscd start` |
 
+When installing via Cargo, you also need to ensure that the development headers
+for the `pcsc-lite` library are available, so that the `pcsc-sys` crate can be
+compiled.
+
+| Environment | CLI command |
+|-------------|-------------|
+| Debian or Ubuntu | `sudo apt-get install libpcsclite-dev` |
+
 ### Windows Subsystem for Linux (WSL)
 
 WSL does not currently provide native support for USB devices. However, Windows
