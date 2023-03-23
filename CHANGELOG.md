@@ -8,7 +8,7 @@ to 0.3.0 are beta releases.
 
 ## [Unreleased]
 ### Changed
-- MSRV is now 1.60.0.
+- MSRV is now 1.65.0.
 - The YubiKey PIV PIN and touch caches are now preserved across processes in
   most cases. See [README.md](README.md#agent-support) for exceptions. This has
   several usability effects (not applicable to YubiKey 4 series):
