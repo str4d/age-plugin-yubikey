@@ -111,7 +111,7 @@ impl RecipientLine {
     }
 
     pub(crate) fn wrap_file_key(file_key: &FileKey, pk: &Recipient) -> Self {
-        let esk = EphemeralSecret::random(OsRng);
+        let esk = EphemeralSecret::random(&mut OsRng);
         let epk = esk.public_key();
         let epk_bytes = EphemeralKeyBytes::from_public_key(&epk);
 
