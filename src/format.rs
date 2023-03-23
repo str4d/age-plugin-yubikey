@@ -3,6 +3,7 @@ use age_core::{
     primitives::aead_encrypt,
     secrecy::ExposeSecret,
 };
+use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use p256::{
     ecdh::EphemeralSecret,
     elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint},
@@ -17,14 +18,6 @@ pub(crate) const STANZA_KEY_LABEL: &[u8] = b"piv-p256";
 const TAG_BYTES: usize = 4;
 const EPK_BYTES: usize = 33;
 const ENCRYPTED_FILE_KEY_BYTES: usize = 32;
-
-const STANDARD_NO_PAD: &base64::engine::fast_portable::FastPortable = {
-    use base64::{
-        alphabet::STANDARD,
-        engine::fast_portable::{FastPortable, NO_PAD},
-    };
-    &FastPortable::from(&STANDARD, NO_PAD)
-};
 
 /// The ephemeral key bytes in a piv-p256 stanza.
 ///
@@ -73,8 +66,8 @@ impl From<RecipientLine> for Stanza {
         Stanza {
             tag: STANZA_TAG.to_owned(),
             args: vec![
-                base64::encode_engine(&r.tag, STANDARD_NO_PAD),
-                base64::encode_engine(r.epk_bytes.as_bytes(), STANDARD_NO_PAD),
+                BASE64_STANDARD_NO_PAD.encode(&r.tag),
+                BASE64_STANDARD_NO_PAD.encode(r.epk_bytes.as_bytes()),
             ],
             body: r.encrypted_file_key.to_vec(),
         }
@@ -92,9 +85,10 @@ impl RecipientLine {
                 return None;
             }
 
-            base64::decode_engine_slice(arg, buf.as_mut(), STANDARD_NO_PAD)
+            BASE64_STANDARD_NO_PAD
+                .decode_slice_unchecked(arg, buf.as_mut())
                 .ok()
-                .map(|_| buf)
+                .and_then(|len| (len == buf.as_mut().len()).then_some(buf))
         }
 
         let (tag, epk_bytes) = match &s.args[..] {
