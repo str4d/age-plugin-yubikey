@@ -27,7 +27,7 @@ pub(crate) struct EphemeralKeyBytes(p256::EncodedPoint);
 
 impl EphemeralKeyBytes {
     fn from_bytes(bytes: [u8; EPK_BYTES]) -> Option<Self> {
-        let encoded = p256::EncodedPoint::from_bytes(&bytes).ok()?;
+        let encoded = p256::EncodedPoint::from_bytes(bytes).ok()?;
         if encoded.is_compressed()
             && p256::PublicKey::from_encoded_point(&encoded)
                 .is_some()
@@ -66,7 +66,7 @@ impl From<RecipientLine> for Stanza {
         Stanza {
             tag: STANZA_TAG.to_owned(),
             args: vec![
-                BASE64_STANDARD_NO_PAD.encode(&r.tag),
+                BASE64_STANDARD_NO_PAD.encode(r.tag),
                 BASE64_STANDARD_NO_PAD.encode(r.epk_bytes.as_bytes()),
             ],
             body: r.encrypted_file_key.to_vec(),
