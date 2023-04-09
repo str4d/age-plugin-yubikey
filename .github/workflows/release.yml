@@ -24,7 +24,7 @@ jobs:
           - windows
         include:
           - name: linux
-            os: ubuntu-18.04
+            os: ubuntu-20.04
             build_deps: >
               libpcsclite-dev
             archive_name: age-plugin-yubikey.tar.gz
@@ -49,10 +49,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
+        id: toolchain
+      - run: rustup override set ${{steps.toolchain.outputs.name}}
       - name: Add target
         run: rustup target add ${{ matrix.target }}
         if: matrix.target != ''
@@ -96,7 +95,7 @@ jobs:
 
   deb:
     name: Debian ${{ matrix.name }}
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         name: [linux]
@@ -108,10 +107,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
+        id: toolchain
+      - run: rustup override set ${{steps.toolchain.outputs.name}}
       - name: Add target
         run: rustup target add ${{ matrix.target }}
       - name: cargo install cargo-deb
