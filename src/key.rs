@@ -354,30 +354,35 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
         yubikey.change_pin(pin.as_bytes(), new_pin.as_bytes())?;
     }
 
-    if let Ok(mgm_key) = MgmKey::get_protected(yubikey) {
-        yubikey.authenticate(mgm_key)?;
-    } else {
-        // Try to authenticate with the default management key.
-        yubikey
-            .authenticate(MgmKey::default())
-            .map_err(|_| Error::CustomManagementKey)?;
+    match MgmKey::get_protected(yubikey) {
+        Ok(mgm_key) => yubikey.authenticate(mgm_key).map_err(|e| match e {
+            yubikey::Error::AuthenticationError => Error::ManagementKeyAuth,
+            _ => e.into(),
+        })?,
+        Err(yubikey::Error::AuthenticationError) => Err(Error::ManagementKeyAuth)?,
+        _ => {
+            // Try to authenticate with the default management key.
+            yubikey
+                .authenticate(MgmKey::default())
+                .map_err(|_| Error::CustomManagementKey)?;
 
-        // Migrate to a PIN-protected management key.
-        let mgm_key = MgmKey::generate();
-        eprintln!();
-        eprintln!("{}", fl!("mgr-changing-mgmt-key"));
-        eprint!("... ");
-        mgm_key.set_protected(yubikey).map_err(|e| {
-            eprintln!(
-                "{}",
-                fl!(
-                    "mgr-changing-mgmt-key-error",
-                    management_key = hex::encode(mgm_key.as_ref()),
-                )
-            );
-            e
-        })?;
-        eprintln!("{}", fl!("mgr-changing-mgmt-key-success"));
+            // Migrate to a PIN-protected management key.
+            let mgm_key = MgmKey::generate();
+            eprintln!();
+            eprintln!("{}", fl!("mgr-changing-mgmt-key"));
+            eprint!("... ");
+            mgm_key.set_protected(yubikey).map_err(|e| {
+                eprintln!(
+                    "{}",
+                    fl!(
+                        "mgr-changing-mgmt-key-error",
+                        management_key = hex::encode(mgm_key.as_ref()),
+                    )
+                );
+                e
+            })?;
+            eprintln!("{}", fl!("mgr-changing-mgmt-key-success"));
+        }
     }
 
     Ok(())
