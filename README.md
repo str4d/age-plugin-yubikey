@@ -52,7 +52,12 @@ YubiKey:
 
 ## Configuration
 
-There are two ways to configure a YubiKey as an `age` identity. You can run the
+`age-plugin-yubikey` identities have two parts:
+- The secret key material, which is stored inside a YubiKey.
+- An age identity file, which contains information that an age client can use to
+  figure out which YubiKey secret key should be used.
+
+There are two ways to configure a YubiKey as an age identity. You can run the
 plugin binary directly to use a simple text interface, which will create an age
 identity file:
 
@@ -76,6 +81,14 @@ Once an identity has been created, you can regenerate it later:
 
 ```
 $ age-plugin-yubikey --identity [--serial SERIAL] --slot SLOT
+```
+
+To use the identity with an age client, it needs to be stored in a file. When
+using the above programmatic flags, you can do this by redirecting standard
+output to a file. On a Unix system like macOS or Ubuntu:
+
+```
+$ age-plugin-yubikey --identity --slot SLOT > yubikey-identity.txt
 ```
 
 ## Usage
