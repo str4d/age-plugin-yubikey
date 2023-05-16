@@ -46,7 +46,7 @@ jobs:
       - name: Generate coverage report
         run: cargo tarpaulin --engine llvm --all-features --release --timeout 600 --out Xml
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3.1.1
+        uses: codecov/codecov-action@v3.1.4
 
   doc-links:
     name: Intra-doc links
