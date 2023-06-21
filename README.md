@@ -24,6 +24,7 @@ is installed and running.
 | Environment | CLI command |
 |-------------|-------------|
 | Debian or Ubuntu | `sudo apt-get install pcscd` |
+| Fedora | `sudo dnf install pcsc-lite` |
 | OpenBSD | As ```root``` do:<br>`pkg_add pcsc-lite ccid`<br>`rcctl enable pcscd`<br>`rcctl start pcscd` |
 | FreeBSD | As ```root``` do:<br>`pkg install pcsc-lite libccid`<br>`service pcscd enable`<br>`service pcscd start` |
 
@@ -34,6 +35,7 @@ compiled.
 | Environment | CLI command |
 |-------------|-------------|
 | Debian or Ubuntu | `sudo apt-get install libpcsclite-dev` |
+| Fedora | `sudo dnf install pcsc-lite-devel` |
 
 ### Windows Subsystem for Linux (WSL)
 
