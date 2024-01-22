@@ -27,6 +27,7 @@ is installed and running.
 | Fedora | `sudo dnf install pcsc-lite` |
 | OpenBSD | As ```root``` do:<br>`pkg_add pcsc-lite ccid`<br>`rcctl enable pcscd`<br>`rcctl start pcscd` |
 | FreeBSD | As ```root``` do:<br>`pkg install pcsc-lite libccid`<br>`service pcscd enable`<br>`service pcscd start` |
+| Arch | `sudo pacman -S pcsclite pcsc-tools yubikey-manager`<br>`sudo systemctl enable pcscd`<br>`sudo systemctl start pcscd`| 
 
 When installing via Cargo, you also need to ensure that the development headers
 for the `pcsc-lite` library are available, so that the `pcsc-sys` crate can be
