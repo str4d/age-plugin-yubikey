@@ -22,7 +22,7 @@ jobs:
             os: macos-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install build dependencies
         run: sudo apt install ${{ matrix.build_deps }}
         if: matrix.build_deps != ''
@@ -38,7 +38,7 @@ jobs:
     name: Code coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install build dependencies
         run: sudo apt install libpcsclite-dev
       - name: Install coverage dependencies
@@ -52,7 +52,7 @@ jobs:
     name: Intra-doc links
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install build dependencies
         run: sudo apt install libpcsclite-dev
       - run: cargo fetch
@@ -65,6 +65,6 @@ jobs:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Check formatting
         run: cargo fmt -- --check
