@@ -26,13 +26,14 @@ jobs:
       - name: Install build dependencies
         run: sudo apt install ${{ matrix.build_deps }}
         if: matrix.build_deps != ''
-      - name: Install test dependencies
-        run: cargo install rage
-      - run: cargo fetch
-      - name: Build tests
-        run: cargo build --verbose --tests
+      - uses: dtolnay/rust-toolchain@stable
+        id: stable-toolchain
+      - name: Install test dependencies using latest stable Rust
+        run: cargo +${{steps.stable-toolchain.outputs.name}} install rage
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test
+      - name: Verify working directory is clean
+        run: git diff --exit-code
 
   codecov:
     name: Code coverage
