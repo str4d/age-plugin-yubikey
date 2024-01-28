@@ -22,23 +22,24 @@ jobs:
             os: macos-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install build dependencies
         run: sudo apt install ${{ matrix.build_deps }}
         if: matrix.build_deps != ''
-      - name: Install test dependencies
-        run: cargo install rage
-      - run: cargo fetch
-      - name: Build tests
-        run: cargo build --verbose --tests
+      - uses: dtolnay/rust-toolchain@stable
+        id: stable-toolchain
+      - name: Install test dependencies using latest stable Rust
+        run: cargo +${{steps.stable-toolchain.outputs.name}} install rage
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test
+      - name: Verify working directory is clean
+        run: git diff --exit-code
 
   codecov:
     name: Code coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install build dependencies
         run: sudo apt install libpcsclite-dev
       - name: Install coverage dependencies
@@ -52,7 +53,7 @@ jobs:
     name: Intra-doc links
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install build dependencies
         run: sudo apt install libpcsclite-dev
       - run: cargo fetch
@@ -62,9 +63,8 @@ jobs:
 
   fmt:
     name: Rustfmt
-    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Check formatting
         run: cargo fmt -- --check

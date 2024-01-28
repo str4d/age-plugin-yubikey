@@ -6,10 +6,9 @@ on: pull_request
 jobs:
   clippy-beta:
     name: Clippy (beta)
-    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@beta
         id: toolchain
       - run: rustup override set ${{steps.toolchain.outputs.name}}
