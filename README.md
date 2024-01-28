@@ -10,6 +10,11 @@ which enables files to be encrypted to age identities stored on YubiKeys.
 |-------------|-------------|
 | Cargo (Rust 1.65+) | `cargo install age-plugin-yubikey` |
 | Homebrew (macOS or Linux) | `brew install age-plugin-yubikey` |
+| Arch Linux | `pacman -S age-plugin-yubikey` |
+| Debian | [Debian package](https://github.com/str4d/age-plugin-yubikey/releases) |
+| NixOS | Add to config:<br>`environment.systemPackages = [`<br>`  pkgs.age-plugin-yubikey`<br>`];`<br>Or run `nix-env -i age-plugin-yubikey` |
+| Ubuntu 20.04+ | [Debian package](https://github.com/str4d/age-plugin-yubikey/releases) |
+| OpenBSD | `pkg_add age-plugin-yubikey` (security/age-plugin-yubikey) |
 
 On Windows, Linux, and macOS, you can use the
 [pre-built binaries](https://github.com/str4d/age-plugin-yubikey/releases).
