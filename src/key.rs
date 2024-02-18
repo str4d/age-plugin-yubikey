@@ -8,6 +8,8 @@ use age_core::{
 use age_plugin::{identity, Callbacks};
 use bech32::{ToBase32, Variant};
 use dialoguer::Password;
+#[cfg(target_os = "linux")]
+use linux_keyutils::{KeyRing, KeyRingIdentifier};
 use log::{debug, error, warn};
 use std::convert::Infallible;
 use std::fmt;
@@ -670,6 +672,23 @@ impl Connection {
             _ => (),
         }
 
+        #[cfg(target_os = "linux")]
+        let maybe_ring = KeyRing::from_special_id(KeyRingIdentifier::Session, false);
+        #[cfg(target_os = "linux")]
+        let description = format!("age-plugin-yubikey-{}-{}", self.yubikey.serial().0, self.slot);
+        #[cfg(target_os = "linux")]
+        const DUMMY: &[u8] = &[0];
+        #[cfg(target_os = "linux")]
+        if let Ok(ring) = maybe_ring {
+            if let Ok(key) = ring.search(&description) {
+                if let Ok(cached_pin) = key.read_to_vec() {
+                    if cached_pin != DUMMY && self.yubikey.verify_pin(&cached_pin).is_ok() {
+                        return Ok(Ok(()))
+                    }
+                }
+            }
+        }
+
         // The policy requires a PIN, so request it.
         let pin = match request_pin(
             |prev_error| {
@@ -702,6 +721,26 @@ impl Connection {
                 message: format!("{:?}", Error::YubiKey(e)),
             }));
         }
+
+        #[cfg(target_os = "linux")]
+        if let Ok(ring) = maybe_ring {
+            // Write a dummy into the keyring first because each key is added without an expiration
+            // time. The actual value is written after successfully setting the expiration time.
+            // See also https://lore.kernel.org/keyrings/ygar0hbrm05.fsf@localhost/T/#u.
+            ring.add_key(&description, DUMMY)
+                .map_err(|e| format!("add_key({description}, [0]): {e}"))
+                .and_then(|key| {
+                    key.set_timeout(300).map_err(|e| format!("set_timeout(300): {e}"))?;
+                    key.update(&pin.expose_secret().as_bytes()).map_err(|e| format!("update(pin): {e}"))?;
+                    Ok(())
+                })
+                .unwrap_or_else(|e| {
+                    callbacks.message(&e)
+                        .expect(&format!("callbacks.message({e})"))
+                        .expect(&format!("callbacks.message({e})?"));
+                });
+        }
+
         Ok(Ok(()))
     }
 
