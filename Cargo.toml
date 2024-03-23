@@ -50,6 +50,9 @@ rust-embed = "6"
 # GnuPG coexistence
 sysinfo = "0.28"
 
+[target.'cfg(target_os="linux")'.dependencies]
+linux-keyutils = { version = "0.2", features = ["std"] }
+
 [dev-dependencies]
 flate2 = "1"
 man = "0.3"
