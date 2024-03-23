@@ -677,12 +677,10 @@ impl Connection {
         #[cfg(target_os = "linux")]
         let description = format!("age-plugin-yubikey-{}-{}", self.yubikey.serial().0, self.slot);
         #[cfg(target_os = "linux")]
-        const DUMMY: &[u8] = &[0];
-        #[cfg(target_os = "linux")]
         if let Ok(ring) = maybe_ring {
             if let Ok(key) = ring.search(&description) {
                 if let Ok(cached_pin) = key.read_to_vec() {
-                    if cached_pin != DUMMY && self.yubikey.verify_pin(&cached_pin).is_ok() {
+                    if self.yubikey.verify_pin(&cached_pin).is_ok() {
                         return Ok(Ok(()))
                     }
                 }
@@ -724,14 +722,10 @@ impl Connection {
 
         #[cfg(target_os = "linux")]
         if let Ok(ring) = maybe_ring {
-            // Write a dummy into the keyring first because each key is added without an expiration
-            // time. The actual value is written after successfully setting the expiration time.
-            // See also https://lore.kernel.org/keyrings/ygar0hbrm05.fsf@localhost/T/#u.
-            ring.add_key(&description, DUMMY)
-                .map_err(|e| format!("add_key({description}, [0]): {e}"))
+            ring.add_key(&description, &pin.expose_secret().as_bytes())
+                .map_err(|e| format!("add_key({description}, pin): {e}"))
                 .and_then(|key| {
                     key.set_timeout(300).map_err(|e| format!("set_timeout(300): {e}"))?;
-                    key.update(&pin.expose_secret().as_bytes()).map_err(|e| format!("update(pin): {e}"))?;
                     Ok(())
                 })
                 .unwrap_or_else(|e| {
