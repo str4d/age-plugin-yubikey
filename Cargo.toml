@@ -33,10 +33,10 @@ gumdrop = "0.8"
 hex = "0.4"
 log = "0.4"
 p256 = { version = "0.13", features = ["ecdh"] }
-pcsc = "2.4"
+pcsc = "2.8"
 rand = "0.8"
 sha2 = "0.10"
-which = "4.1"
+which = "4.4"
 x509 = "0.2"
 x509-parser = "0.14"
 yubikey = { version = "=0.8.0-pre.0", features = ["untested"] }

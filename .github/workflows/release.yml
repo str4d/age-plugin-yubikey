@@ -24,7 +24,7 @@ jobs:
           - windows
         include:
           - name: linux
-            os: ubuntu-20.04
+            os: ubuntu-latest
             build_deps: >
               libpcsclite-dev
             archive_name: age-plugin-yubikey.tar.gz
@@ -86,7 +86,7 @@ jobs:
         if: matrix.name == 'windows'
 
       - name: Upload archive to release
-        uses: svenstaro/upload-release-action@2.6.1
+        uses: svenstaro/upload-release-action@2.9.0
         with:
           file: ${{ matrix.archive_name }}
           asset_name: age-plugin-yubikey-$tag-${{ matrix.asset_suffix }}
@@ -95,7 +95,7 @@ jobs:
 
   deb:
     name: Debian ${{ matrix.name }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         name: [linux]
@@ -144,7 +144,7 @@ jobs:
           args: --package age-plugin-yubikey --no-build --target ${{ matrix.target }}
 
       - name: Upload Debian package to release
-        uses: svenstaro/upload-release-action@2.6.1
+        uses: svenstaro/upload-release-action@2.9.0
         with:
           file: target/${{ matrix.target }}/debian/*.deb
           file_glob: true
