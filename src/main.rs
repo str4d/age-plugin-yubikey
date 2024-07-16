@@ -21,6 +21,7 @@ mod native;
 mod piv_p256;
 mod plugin;
 mod util;
+mod x25519;
 
 mod recipient;
 use recipient::Recipient;

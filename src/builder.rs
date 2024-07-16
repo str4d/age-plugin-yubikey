@@ -102,7 +102,7 @@ impl IdentityBuilder {
         let generated = yubikey_generate(
             yubikey,
             SlotId::Retired(slot),
-            AlgorithmId::EccP256,
+            AlgorithmId::X25519,
             policies.pin,
             policies.touch,
         )?;

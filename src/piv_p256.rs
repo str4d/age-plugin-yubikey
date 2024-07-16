@@ -11,7 +11,6 @@ use p256::{
         sec1::{FromSec1Point, ToSec1Point},
     },
 };
-use sha2::Sha256;
 
 use crate::{key::Connection, recipient::TAG_BYTES, util::base64_arg};
 
@@ -112,14 +111,7 @@ impl Recipient {
 
         let salt = salt(&epk_bytes, self.to_encoded());
 
-        let enc_key = {
-            let mut okm = [0; 32];
-            shared_secret
-                .extract::<Sha256>(Some(&salt))
-                .expand(STANZA_KEY_LABEL, &mut okm)
-                .expect("okm is the correct length");
-            okm
-        };
+        let enc_key = hkdf(&salt, STANZA_KEY_LABEL, shared_secret.raw_secret_bytes());
 
         let encrypted_file_key = {
             let mut key = [0; ENCRYPTED_FILE_KEY_BYTES];
