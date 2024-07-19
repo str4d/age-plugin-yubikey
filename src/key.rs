@@ -5,7 +5,6 @@ use age_core::secrecy::{ExposeSecret, SecretString};
 use age_plugin::{identity, Callbacks};
 use dialoguer::Password;
 use log::{debug, error, warn};
-use p256::pkcs8::ObjectIdentifier;
 use rand::rngs::SysRng;
 use std::convert::Infallible;
 use std::fmt;
@@ -13,9 +12,10 @@ use std::io;
 use std::iter;
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime};
+use x509_cert::spki::ObjectIdentifier;
 use yubikey::{
     certificate::Certificate,
-    piv::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
+    piv::{decrypt_data, RetiredSlotId, SlotId},
     reader::{Context, Reader},
     Key, MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
@@ -24,13 +24,13 @@ use crate::{
     error::Error,
     fl,
     native::p256tag,
-    recipient::TAG_BYTES,
     util::{otp_serial_prefix, Metadata, POLICY_EXTENSION_OID},
     Recipient, IDENTITY_PREFIX,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
 const FIFTEEN_SECONDS: Duration = Duration::from_secs(15);
+const TAG_BYTES: usize = 4;
 
 /// The set of OIDs that we understand and use when parsing YubiKey slot certificates.
 const KNOWN_OIDS: &[ObjectIdentifier] = &[POLICY_EXTENSION_OID];
@@ -737,6 +737,8 @@ impl Connection {
         // uncompressed SEC-1 encoding.
         assert_eq!(epk_bytes.len(), 65);
 
+        let algorithm = self.pk.algorithm();
+
         // Check if the touch policy requires a touch.
         let needs_touch = match (
             self.cached_metadata.as_ref().and_then(|m| m.touch_policy),
@@ -750,7 +752,7 @@ impl Connection {
         let shared_secret = match decrypt_data(
             &mut self.yubikey,
             epk_bytes,
-            AlgorithmId::EccP256,
+            algorithm,
             SlotId::Retired(self.slot),
         ) {
             Ok(res) => res,

@@ -13,7 +13,7 @@ use x509_cert::{
     ext::{Criticality, ToExtension},
 };
 use yubikey::{
-    piv::{RetiredSlotId, SlotId},
+    piv::{AlgorithmId, RetiredSlotId, SlotId},
     Certificate, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
@@ -98,6 +98,14 @@ impl Criticality for UsagePolicies {
         _extensions: &[x509_cert::ext::Extension],
     ) -> bool {
         false
+    }
+}
+
+pub(crate) fn algorithm_from_string(s: String) -> Result<AlgorithmId, Error> {
+    match s.as_str() {
+        "ECCP256" => Ok(AlgorithmId::EccP256),
+        "X25519" => Ok(AlgorithmId::X25519),
+        _ => Err(Error::YubiKey(yubikey::Error::AlgorithmError)),
     }
 }
 

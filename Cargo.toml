@@ -43,8 +43,9 @@ which = "5"
 x509-cert = "0.3.0-rc.2"
 const-oid = "0.10.1"
 yubikey = { version = "=0.9.0-pre.0", features = ["untested"] }
-curve25519-dalek = "4"
-x25519-dalek = "2"
+curve25519-dalek = "5.0.0-pre.0"
+x25519-dalek = "3.0.0-pre.0"
+spki = { version = "0.8.0-rc.4", features = ["alloc"] }
 
 # Translations
 i18n-embed = { version = "0.15", features = ["desktop-requester", "fluent-system"] }

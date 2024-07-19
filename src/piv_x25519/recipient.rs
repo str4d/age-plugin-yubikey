@@ -6,8 +6,9 @@ use yubikey::Certificate;
 
 use std::fmt;
 
+use crate::recipient::TAG_BYTES;
+
 const RECIPIENT_PREFIX: bech32::Hrp = bech32::Hrp::parse_unchecked("age1tag");
-pub(crate) const TAG_BYTES: usize = 4;
 
 #[derive(Clone)]
 pub struct Recipient(PublicKey);
@@ -27,7 +28,7 @@ impl fmt::Display for Recipient {
 impl Recipient {
     /// Attempts to parse a valid YubiKey recipient from its compressed SEC-1 byte encoding.
     pub(crate) fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        let data: [u8; 32] = bytes.try_into().unwrap();
+        let data: [u8; 32] = bytes.try_into().expect("correct key length");
         match PublicKey::try_from(data) {
             Ok(pubkey) => Some(Self(pubkey)),
             _ => None,

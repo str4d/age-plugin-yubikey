@@ -3,6 +3,7 @@ use std::fmt;
 use age_core::format::{FileKey, Stanza};
 use sha2::{Digest, Sha256};
 use x509_cert::spki::SubjectPublicKeyInfoRef;
+use yubikey::piv::AlgorithmId;
 
 use crate::{native::p256tag, piv_p256, util::Metadata, PLUGIN_NAME};
 
@@ -30,6 +31,12 @@ impl Recipient {
             PLUGIN_NAME => piv_p256::Recipient::from_bytes(bytes).map(Self::PivP256),
             p256tag::PLUGIN_NAME => p256tag::Recipient::from_bytes(bytes).map(Self::P256Tag),
             _ => None,
+        }
+    }
+
+    pub(crate) fn algorithm(&self) -> AlgorithmId {
+        match self {
+            Self::PivP256(_) | Self::P256Tag(_) => AlgorithmId::EccP256,
         }
     }
 
