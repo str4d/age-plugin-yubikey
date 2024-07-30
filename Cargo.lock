@@ -995,7 +995,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -1031,9 +1031,9 @@ dependencies = [
 
 [[package]]
 name = "i18n-embed"
-version = "0.13.9"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92a86226a7a16632de6723449ee5fe70bac5af718bc642ee9ca2f0f6e14fa1fa"
+checksum = "94205d95764f5bb9db9ea98fa77f89653365ca748e27161f5bbea2ffd50e459c"
 dependencies = [
  "arc-swap",
  "fluent",
@@ -1053,9 +1053,9 @@ dependencies = [
 
 [[package]]
 name = "i18n-embed-fl"
-version = "0.6.7"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d26a3d3569737dfaac7fc1c4078e6af07471c3060b8e570bcd83cdd5f4685395"
+checksum = "8241a781f49e923415e106fcd1f89c3fab92cc9f699a521c56e95dee273903d3"
 dependencies = [
  "dashmap",
  "find-crate",
@@ -1903,9 +1903,9 @@ dependencies = [
 
 [[package]]
 name = "rust-embed"
-version = "6.8.1"
+version = "8.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a36224c3276f8c4ebc8c20f158eca7ca4359c8db89991c4925132aaaf6702661"
+checksum = "fb78f46d0066053d16d4ca7b898e9343bc3530f71c61d5ad84cd404ada068745"
 dependencies = [
  "rust-embed-impl",
  "rust-embed-utils",
@@ -1914,9 +1914,9 @@ dependencies = [
 
 [[package]]
 name = "rust-embed-impl"
-version = "6.8.1"
+version = "8.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49b94b81e5b2c284684141a2fb9e2a31be90638caf040bf9afbc5a0416afe1ac"
+checksum = "b91ac2a3c6c0520a3fb3dd89321177c3c692937c4eb21893378219da10c44fc8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1927,9 +1927,9 @@ dependencies = [
 
 [[package]]
 name = "rust-embed-utils"
-version = "7.8.1"
+version = "8.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d38ff6bf570dc3bb7100fce9f7b60c33fa71d80e88da3f2580df4ff2bdded74"
+checksum = "86f69089032567ffff4eada41c573fc43ff466c7db7c5688b2e7969584345581"
 dependencies = [
  "sha2",
  "walkdir",

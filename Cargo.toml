@@ -42,10 +42,10 @@ x509-parser = "0.14"
 yubikey = { version = "=0.8.0-pre.0", features = ["untested"] }
 
 # Translations
-i18n-embed = { version = "0.13", features = ["desktop-requester", "fluent-system"] }
-i18n-embed-fl = "0.6"
+i18n-embed = { version = "0.14", features = ["desktop-requester", "fluent-system"] }
+i18n-embed-fl = "0.8"
 lazy_static = "1"
-rust-embed = "6"
+rust-embed = "8"
 
 # GnuPG coexistence
 sysinfo = "0.28"
