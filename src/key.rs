@@ -326,7 +326,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
             let pin = request_pin(
                 |prev_error| {
                     if let Some(err) = prev_error {
-                        eprintln!("{}", err);
+                        eprintln!("{err}");
                     }
                     Password::new()
                         .with_prompt(fl!("mgr-choose-new-pin"))

@@ -177,7 +177,7 @@ impl Metadata {
                     .validity()
                     .not_before
                     .to_rfc2822()
-                    .unwrap_or_else(|e| format!("Invalid date: {}", e)),
+                    .unwrap_or_else(|e| format!("Invalid date: {e}")),
                 pin_policy,
                 touch_policy,
             })
