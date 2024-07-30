@@ -8,7 +8,7 @@ which enables files to be encrypted to age identities stored on YubiKeys.
 
 | Environment | CLI command |
 |-------------|-------------|
-| Cargo (Rust 1.65+) | `cargo install age-plugin-yubikey` |
+| Cargo (Rust 1.67+) | `cargo install age-plugin-yubikey` |
 | Homebrew (macOS or Linux) | `brew install age-plugin-yubikey` |
 | Arch Linux | `pacman -S age-plugin-yubikey` |
 | Debian | [Debian package](https://github.com/str4d/age-plugin-yubikey/releases) |
