@@ -38,14 +38,20 @@ jobs:
   codecov:
     name: Code coverage
     runs-on: ubuntu-latest
+    container:
+      image: xd009642/tarpaulin:develop-nightly
+      options: --security-opt seccomp=unconfined
+
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
-        run: sudo apt install libpcsclite-dev
-      - name: Install coverage dependencies
-        run: cargo install cargo-tarpaulin
+        run: apt update && apt install -y libpcsclite-dev
       - name: Generate coverage report
-        run: cargo tarpaulin --engine llvm --all-features --release --timeout 600 --out Xml
+        run: >
+          cargo tarpaulin
+          --engine llvm
+          --timeout 180
+          --out xml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3.1.5
 
