@@ -22,8 +22,8 @@ assets = [
 ]
 
 [dependencies]
-age-core = "0.9"
-age-plugin = "0.4"
+age-core = "0.10"
+age-plugin = "0.5"
 base64 = "0.21"
 bech32 = "0.9"
 console = { version = "0.15", default-features = false }

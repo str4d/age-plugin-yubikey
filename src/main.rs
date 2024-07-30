@@ -329,8 +329,8 @@ fn main() -> Result<(), Error> {
     if let Some(state_machine) = opts.age_plugin {
         run_state_machine(
             &state_machine,
-            plugin::RecipientPlugin::default,
-            plugin::IdentityPlugin::default,
+            Some(plugin::RecipientPlugin::default),
+            Some(plugin::IdentityPlugin::default),
         )?;
         Ok(())
     } else if opts.version {
