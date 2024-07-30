@@ -15,6 +15,7 @@ macro_rules! wlnfl {
 
 pub enum Error {
     CustomManagementKey,
+    Dialog(dialoguer::Error),
     InvalidFlagCommand(String, String),
     InvalidFlagTui(String),
     InvalidPinPolicy(String),
@@ -33,6 +34,12 @@ pub enum Error {
     UseListForSingleSlot,
     WrongPuk(u8),
     YubiKey(yubikey::Error),
+}
+
+impl From<dialoguer::Error> for Error {
+    fn from(e: dialoguer::Error) -> Self {
+        Error::Dialog(e)
+    }
 }
 
 impl From<io::Error> for Error {
@@ -65,6 +72,7 @@ impl fmt::Debug for Error {
                     url = CHANGE_MGMT_KEY_URL
                 )?;
             }
+            Error::Dialog(e) => wlnfl!(f, "err-io-user", err = e.to_string())?,
             Error::InvalidFlagCommand(flag, command) => wlnfl!(
                 f,
                 "err-invalid-flag-command",

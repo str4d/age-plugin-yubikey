@@ -274,10 +274,10 @@ pub(crate) fn disconnect_without_reset(yubikey: YubiKey) {
     let _ = yubikey.disconnect(pcsc::Disposition::LeaveCard);
 }
 
-fn request_pin<E>(
-    mut prompt: impl FnMut(Option<String>) -> io::Result<Result<SecretString, E>>,
+fn request_pin<E, E2>(
+    mut prompt: impl FnMut(Option<String>) -> Result<Result<SecretString, E>, E2>,
     serial: Serial,
-) -> io::Result<Result<SecretString, E>> {
+) -> Result<Result<SecretString, E>, E2> {
     let mut prev_error = None;
     loop {
         prev_error = Some(match prompt(prev_error)? {
