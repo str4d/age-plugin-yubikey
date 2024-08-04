@@ -7,6 +7,11 @@ and this project adheres to Rust's notion of
 to 0.3.0 are beta releases.
 
 ## [Unreleased]
+
+## [0.5.0] - 2024-08-04
+### Fixed
+- `age-plugin-yubikey` can now be compiled with Rust 1.80 and above.
+
 ### Changed
 - MSRV is now 1.67.0.
 
