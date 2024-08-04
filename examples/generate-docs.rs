@@ -6,7 +6,7 @@ use std::io::prelude::*;
 const MANPAGES_DIR: &str = "./target/manpages";
 
 fn generate_manpage(page: String, name: &str) {
-    let file = File::create(format!("{}/{}.1.gz", MANPAGES_DIR, name))
+    let file = File::create(format!("{MANPAGES_DIR}/{name}.1.gz"))
         .expect("Should be able to open file in target directory");
     let mut encoder = GzEncoder::new(file, Compression::best());
     encoder

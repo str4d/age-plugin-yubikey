@@ -296,8 +296,8 @@ fn list(flags: PluginFlags, all: bool) -> Result<(), Error> {
         flags,
         all,
         |_, recipient, metadata| {
-            println!("{}", metadata);
-            println!("{}", recipient);
+            println!("{metadata}");
+            println!("{recipient}");
         },
     )
 }
@@ -329,8 +329,8 @@ fn main() -> Result<(), Error> {
     if let Some(state_machine) = opts.age_plugin {
         run_state_machine(
             &state_machine,
-            plugin::RecipientPlugin::default,
-            plugin::IdentityPlugin::default,
+            Some(plugin::RecipientPlugin::default),
+            Some(plugin::IdentityPlugin::default),
         )?;
         Ok(())
     } else if opts.version {
@@ -411,9 +411,9 @@ fn main() -> Result<(), Error> {
                                 .validity()
                                 .not_before
                                 .to_rfc2822()
-                                .unwrap_or_else(|e| format!("Invalid date: {}", e));
+                                .unwrap_or_else(|e| format!("Invalid date: {e}"));
 
-                            format!("{}, created: {}", name, created)
+                            format!("{name}, created: {created}")
                         })
                     })
             })
@@ -631,14 +631,8 @@ fn main() -> Result<(), Error> {
         // If `rage` binary is installed, use it in examples. Otherwise default to `age`.
         let age_binary = which::which("rage").map(|_| "rage").unwrap_or("age");
 
-        let encrypt_usage = format!(
-            "$ cat foo.txt | {} -r {} -o foo.txt.age",
-            age_binary, recipient
-        );
-        let decrypt_usage = format!(
-            "$ cat foo.txt.age | {} -d -i {} > foo.txt",
-            age_binary, file_name
-        );
+        let encrypt_usage = format!("$ cat foo.txt | {age_binary} -r {recipient} -o foo.txt.age");
+        let decrypt_usage = format!("$ cat foo.txt.age | {age_binary} -d -i {file_name} > foo.txt");
         let identity_usage = format!(
             "$ age-plugin-yubikey -i --serial {} --slot {} > {}",
             stub.serial,

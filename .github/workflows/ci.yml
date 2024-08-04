@@ -1,10 +1,13 @@
 name: CI checks
 
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches: main
 
 jobs:
-  test:
-    name: Test on ${{ matrix.name }}
+  test-msrv:
+    name: Test MSRV on ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -35,19 +38,64 @@ jobs:
       - name: Verify working directory is clean
         run: git diff --exit-code
 
-  codecov:
-    name: Code coverage
-    runs-on: ubuntu-latest
+  test-latest:
+    name: Test latest stable on ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        name: [linux, windows, macos]
+        include:
+          - name: linux
+            os: ubuntu-latest
+            build_deps: >
+              libpcsclite-dev
+
+          - name: windows
+            os: windows-latest
+
+          - name: macos
+            os: macos-latest
+
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
-        run: sudo apt install libpcsclite-dev
-      - name: Install coverage dependencies
-        run: cargo install cargo-tarpaulin
+        run: sudo apt install ${{ matrix.build_deps }}
+        if: matrix.build_deps != ''
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
+        id: toolchain
+      - run: rustup override set ${{steps.toolchain.outputs.name}}
+      - name: Install test dependencies
+        run: cargo install rage
+      - name: Remove lockfile to build with latest dependencies
+        run: rm Cargo.lock
+      - name: Run tests
+        run: cargo test
+      - name: Verify working directory is clean (excluding lockfile)
+        run: git diff --exit-code ':!Cargo.lock'
+
+  codecov:
+    name: Code coverage
+    runs-on: ubuntu-latest
+    container:
+      image: xd009642/tarpaulin:develop-nightly
+      options: --security-opt seccomp=unconfined
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: apt update && apt install -y libpcsclite-dev
       - name: Generate coverage report
-        run: cargo tarpaulin --engine llvm --all-features --release --timeout 600 --out Xml
+        run: >
+          cargo tarpaulin
+          --engine llvm
+          --timeout 180
+          --out xml
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3.1.5
+        uses: codecov/codecov-action@v4.5.0
+        with:
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   doc-links:
     name: Intra-doc links

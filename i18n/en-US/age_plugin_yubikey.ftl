@@ -204,6 +204,7 @@ err-invalid-flag-tui     = Flag '{$flag}' cannot be used with the interactive in
 err-invalid-pin-policy   = Invalid PIN policy '{$policy}' (expected [{$expected}]).
 err-invalid-slot         = Invalid slot '{$slot}' (expected number between 1 and 20).
 err-invalid-touch-policy = Invalid touch policy '{$policy}' (expected [{$expected}]).
+err-io-user              = Failed to get input from user: {$err}
 err-io                   = Failed to set up {-yubikey}: {$err}
 err-multiple-commands    = Only one of {-cmd-generate}, {-cmd-identity}, {-cmd-list}, {-cmd-list-all} can be specified.
 err-multiple-yubikeys    = Multiple {-yubikeys} are plugged in. Use {-flag-serial} to select a single {-yubikey}.

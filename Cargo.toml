@@ -9,7 +9,7 @@ keywords = ["age", "cli", "encryption", "yubikey"]
 categories = ["command-line-utilities", "cryptography"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
-rust-version = "1.65" # MSRV
+rust-version = "1.67" # MSRV
 
 [package.metadata.deb]
 extended-description = """\
@@ -22,12 +22,12 @@ assets = [
 ]
 
 [dependencies]
-age-core = "0.9"
-age-plugin = "0.4"
+age-core = "0.10"
+age-plugin = "0.5"
 base64 = "0.21"
 bech32 = "0.9"
 console = { version = "0.15", default-features = false }
-dialoguer = { version = "0.10", default-features = false, features = ["password"] }
+dialoguer = { version = "0.11", default-features = false, features = ["password"] }
 env_logger = "0.10"
 gumdrop = "0.8"
 hex = "0.4"
@@ -36,23 +36,23 @@ p256 = { version = "0.13", features = ["ecdh"] }
 pcsc = "2.4"
 rand = "0.8"
 sha2 = "0.10"
-which = "4.1"
+which = "5"
 x509 = "0.2"
 x509-parser = "0.14"
 yubikey = { version = "=0.8.0-pre.0", features = ["untested"] }
 
 # Translations
-i18n-embed = { version = "0.13", features = ["desktop-requester", "fluent-system"] }
-i18n-embed-fl = "0.6"
+i18n-embed = { version = "0.14", features = ["desktop-requester", "fluent-system"] }
+i18n-embed-fl = "0.8"
 lazy_static = "1"
-rust-embed = "6"
+rust-embed = "8"
 
 # GnuPG coexistence
-sysinfo = "0.28"
+sysinfo = "0.29"
 
 [dev-dependencies]
 flate2 = "1"
 man = "0.3"
 tempfile = "3"
-test-with = "0.9"
-which = "4"
+test-with = "0.11"
+which = "5"

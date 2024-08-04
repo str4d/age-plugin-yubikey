@@ -274,10 +274,10 @@ pub(crate) fn disconnect_without_reset(yubikey: YubiKey) {
     let _ = yubikey.disconnect(pcsc::Disposition::LeaveCard);
 }
 
-fn request_pin<E>(
-    mut prompt: impl FnMut(Option<String>) -> io::Result<Result<SecretString, E>>,
+fn request_pin<E, E2>(
+    mut prompt: impl FnMut(Option<String>) -> Result<Result<SecretString, E>, E2>,
     serial: Serial,
-) -> io::Result<Result<SecretString, E>> {
+) -> Result<Result<SecretString, E>, E2> {
     let mut prev_error = None;
     loop {
         prev_error = Some(match prompt(prev_error)? {
@@ -326,7 +326,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
             let pin = request_pin(
                 |prev_error| {
                     if let Some(err) = prev_error {
-                        eprintln!("{}", err);
+                        eprintln!("{err}");
                     }
                     Password::new()
                         .with_prompt(fl!("mgr-choose-new-pin"))
