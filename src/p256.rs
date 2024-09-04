@@ -1,7 +1,10 @@
 use bech32::{ToBase32, Variant};
-use p256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
+use p256::{
+    elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint},
+    pkcs8::SubjectPublicKeyInfoRef,
+};
 use sha2::{Digest, Sha256};
-use yubikey::{certificate::PublicKeyInfo, Certificate};
+use yubikey::Certificate;
 
 use std::fmt;
 
@@ -48,11 +51,9 @@ impl Recipient {
         Self::from_spki(cert.subject_pki())
     }
 
-    pub(crate) fn from_spki(spki: &PublicKeyInfo) -> Option<Self> {
-        match spki {
-            PublicKeyInfo::EcP256(pubkey) => Self::from_encoded(pubkey),
-            _ => None,
-        }
+    pub(crate) fn from_spki(spki: SubjectPublicKeyInfoRef<'_>) -> Option<Self> {
+        // TODO: https://github.com/RustCrypto/formats/issues/1604
+        p256::PublicKey::try_from(spki).ok().map(Recipient)
     }
 
     /// Attempts to parse a valid YubiKey recipient from its SEC-1 encoding.
