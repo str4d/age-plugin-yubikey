@@ -2,6 +2,7 @@ use std::fmt;
 
 use age_core::format::{FileKey, Stanza};
 use sha2::{Digest, Sha256};
+use x509_cert::spki::SubjectPublicKeyInfoRef;
 
 use crate::{native::p256tag, piv_p256, util::Metadata, PLUGIN_NAME};
 
@@ -28,6 +29,13 @@ impl Recipient {
         match plugin_name {
             PLUGIN_NAME => piv_p256::Recipient::from_bytes(bytes).map(Self::PivP256),
             p256tag::PLUGIN_NAME => p256tag::Recipient::from_bytes(bytes).map(Self::P256Tag),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn from_spki(spki: SubjectPublicKeyInfoRef<'_>) -> Option<Self> {
+        match spki.algorithm.oid {
+            p256tag::OID_P256 => p256tag::Recipient::from_spki(spki).map(Self::P256Tag),
             _ => None,
         }
     }

@@ -6,9 +6,11 @@ use age_core::{
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use p256::{
     ecdh::EphemeralSecret,
-    elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint},
+    elliptic_curve::{
+        common::Generate,
+        sec1::{FromSec1Point, ToSec1Point},
+    },
 };
-use rand::rngs::OsRng;
 use sha2::Sha256;
 
 use crate::{key::Connection, recipient::TAG_BYTES, util::base64_arg};
@@ -26,16 +28,12 @@ const ENCRYPTED_FILE_KEY_BYTES: usize = 32;
 ///
 /// The bytes contain a compressed SEC-1 encoding of a valid point.
 #[derive(Debug)]
-pub(crate) struct EphemeralKeyBytes(p256::EncodedPoint);
+pub(crate) struct EphemeralKeyBytes(p256::Sec1Point);
 
 impl EphemeralKeyBytes {
     fn from_bytes(bytes: [u8; EPK_BYTES]) -> Option<Self> {
-        let encoded = p256::EncodedPoint::from_bytes(bytes).ok()?;
-        if encoded.is_compressed()
-            && p256::PublicKey::from_encoded_point(&encoded)
-                .is_some()
-                .into()
-        {
+        let encoded = p256::Sec1Point::from_bytes(bytes).ok()?;
+        if encoded.is_compressed() && p256::PublicKey::from_sec1_point(&encoded).is_some().into() {
             Some(EphemeralKeyBytes(encoded))
         } else {
             None
@@ -43,17 +41,17 @@ impl EphemeralKeyBytes {
     }
 
     fn from_public_key(epk: &p256::PublicKey) -> Self {
-        EphemeralKeyBytes(epk.to_encoded_point(true))
+        EphemeralKeyBytes(epk.to_sec1_point(true))
     }
 
     pub(crate) fn as_bytes(&self) -> &[u8] {
         self.0.as_bytes()
     }
 
-    pub(crate) fn decompress(&self) -> p256::EncodedPoint {
+    pub(crate) fn decompress(&self) -> p256::Sec1Point {
         // EphemeralKeyBytes is a valid compressed encoding by construction.
-        let p = p256::PublicKey::from_encoded_point(&self.0).unwrap();
-        p.to_encoded_point(false)
+        let p = p256::PublicKey::from_sec1_point(&self.0).unwrap();
+        p.to_sec1_point(false)
     }
 }
 
@@ -105,7 +103,8 @@ impl RecipientLine {
 
 impl Recipient {
     pub(crate) fn wrap_file_key(&self, file_key: &FileKey) -> RecipientLine {
-        let esk = EphemeralSecret::random(&mut OsRng);
+        let mut csprng = rand::rng();
+        let esk = EphemeralSecret::generate_from_rng(&mut csprng);
         let epk = esk.public_key();
         let epk_bytes = EphemeralKeyBytes::from_public_key(&epk);
 
@@ -169,7 +168,7 @@ impl RecipientLine {
     }
 }
 
-fn salt(epk_bytes: &EphemeralKeyBytes, pk: p256::EncodedPoint) -> Vec<u8> {
+fn salt(epk_bytes: &EphemeralKeyBytes, pk: p256::Sec1Point) -> Vec<u8> {
     assert!(pk.is_compressed());
     let mut salt = vec![];
     salt.extend_from_slice(epk_bytes.as_bytes());

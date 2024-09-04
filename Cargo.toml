@@ -26,22 +26,23 @@ age-core = "0.11"
 age-plugin = "0.6"
 base64 = "0.22"
 bech32 = "0.11"
+chrono = "0.4"
 console = { version = "0.15", default-features = false }
 dialoguer = { version = "0.11", default-features = false, features = ["password"] }
 env_logger = "0.10"
 gumdrop = "0.8"
 hex = "0.4"
-hkdf = "0.12"
-hpke = { version = "0.12", default-features = false, features = ["alloc", "p256"] }
+hkdf = "0.13"
+hpke = { version = "=0.14.0-pre.1", default-features = false, features = ["alloc", "p256"] }
 log = "0.4"
-p256 = { version = "0.13", features = ["ecdh"] }
+p256 = { version = "0.14.0-pre.11", features = ["ecdh", "pkcs8"] }
 pcsc = "2.4"
-rand = "0.8"
-sha2 = "0.10"
+rand = "0.10.0"
+sha2 = "0.11.0-rc.0"
 which = "5"
-x509 = "0.2"
-x509-parser = "0.14"
-yubikey = { version = "=0.8.0-pre.0", features = ["untested"] }
+x509-cert = "0.3.0-rc.2"
+const-oid = "0.10.1"
+yubikey = { version = "=0.9.0-pre.0", features = ["untested"] }
 
 # Translations
 i18n-embed = { version = "0.15", features = ["desktop-requester", "fluent-system"] }

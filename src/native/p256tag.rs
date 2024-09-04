@@ -3,17 +3,17 @@ use std::marker::PhantomData;
 
 use age_core::{
     format::{FileKey, Stanza},
-    primitives::{bech32_encode_to_fmt, hpke_open, hpke_seal},
+    primitives::bech32_encode_to_fmt,
     secrecy::{zeroize::Zeroize, ExposeSecret},
 };
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use hpke::{Deserializable, Serializable};
 use p256::{
-    elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint},
-    EncodedPoint,
+    elliptic_curve::sec1::{FromSec1Point, ToSec1Point},
+    Sec1Point,
 };
-use rand::rngs::OsRng;
-use yubikey::{certificate::PublicKeyInfo, Certificate};
+use x509_cert::spki::{ObjectIdentifier, SubjectPublicKeyInfoRef};
+use yubikey::Certificate;
 
 use super::{stanza_tag, YubiKeyKemPrivateKey};
 use crate::{
@@ -21,6 +21,8 @@ use crate::{
     recipient::static_tag,
     util::base64_arg,
 };
+
+pub const OID_P256: ObjectIdentifier = p256::elliptic_curve::ALGORITHM_OID;
 
 pub(crate) const PLUGIN_NAME: &str = "tag";
 const RECIPIENT_PREFIX: bech32::Hrp = bech32::Hrp::parse_unchecked("age1tag");
@@ -37,6 +39,40 @@ const TAG_BYTES: usize = 4;
 /// [SECG]: https://secg.org/sec1-v2.pdf
 const ENC_BYTES: usize = 65;
 
+/// TODO: Remove these rewrites when age-core update rand lib
+fn hpke_seal<R: hpke::rand_core::CryptoRng + hpke::rand_core::Rng>(
+    pk_recip: &<Kem as hpke::Kem>::PublicKey,
+    info: &[u8],
+    plaintext: &[u8],
+    rng: &mut R,
+) -> (<Kem as hpke::Kem>::EncappedKey, Vec<u8>) {
+    hpke::single_shot_seal::<hpke::aead::ChaCha20Poly1305, hpke::kdf::HkdfSha256, Kem, R>(
+        &hpke::OpModeS::Base,
+        pk_recip,
+        info,
+        plaintext,
+        &[],
+        rng,
+    )
+    .expect("no errors should occur with these HPKE parameters")
+}
+
+pub fn hpke_open<Kem: hpke::Kem>(
+    encapped_key: &<Kem as hpke::Kem>::EncappedKey,
+    sk_recip: &Kem::PrivateKey,
+    info: &[u8],
+    ciphertext: &[u8],
+) -> Result<Vec<u8>, hpke::HpkeError> {
+    hpke::single_shot_open::<hpke::aead::ChaCha20Poly1305, hpke::kdf::HkdfSha256, Kem>(
+        &hpke::OpModeR::Base,
+        sk_recip,
+        encapped_key,
+        info,
+        ciphertext,
+        &[],
+    )
+}
+
 type Kem = hpke::kem::DhP256HkdfSha256;
 
 /// The non-hybrid tagged age recipient type, designed for hardware keys where decryption
@@ -48,7 +84,7 @@ type Kem = hpke::kem::DhP256HkdfSha256;
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Recipient {
     /// Compressed encoding of the recipient public key.
-    compressed: EncodedPoint,
+    compressed: Sec1Point,
     /// Cached in-memory representation, for HPKE.
     pk_recip: <Kem as hpke::Kem>::PublicKey,
 }
@@ -68,15 +104,15 @@ impl fmt::Debug for Recipient {
 impl Recipient {
     /// Attempts to parse a valid p256tag recipient from its compressed SEC-1 byte encoding.
     pub(crate) fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        let encoded = p256::EncodedPoint::from_bytes(bytes).ok()?;
+        let encoded = p256::Sec1Point::from_bytes(bytes).ok()?;
         if !encoded.is_compressed() {
             return None;
         }
 
-        let point = p256::PublicKey::from_encoded_point(&encoded).into_option()?;
+        let point = p256::PublicKey::from_sec1_point(&encoded).into_option()?;
 
         let pk_recip =
-            <Kem as hpke::Kem>::PublicKey::from_bytes(point.to_encoded_point(false).as_bytes())
+            <Kem as hpke::Kem>::PublicKey::from_bytes(point.to_sec1_point(false).as_bytes())
                 .expect("valid");
 
         Some(Self {
@@ -89,26 +125,24 @@ impl Recipient {
         Self::from_spki(cert.subject_pki())
     }
 
-    pub(crate) fn from_spki(spki: &PublicKeyInfo) -> Option<Self> {
-        let encoded = match spki {
-            PublicKeyInfo::EcP256(pubkey) => Some(pubkey),
+    pub(crate) fn from_spki(spki: SubjectPublicKeyInfoRef<'_>) -> Option<Self> {
+        match p256::PublicKey::try_from(spki) {
+            Ok(pk) => {
+                let compressed = pk.to_sec1_point(true);
+                let pk_recip =
+                    <Kem as hpke::Kem>::PublicKey::from_bytes(pk.to_sec1_point(false).as_bytes())
+                        .ok()?;
+                Some(Self {
+                    compressed,
+                    pk_recip,
+                })
+            }
             _ => None,
-        }?;
-
-        // Check that the certificate encoding is uncompressed.
-        let pk_recip = <Kem as hpke::Kem>::PublicKey::from_bytes(encoded.as_bytes()).ok()?;
-
-        let point = p256::PublicKey::from_encoded_point(encoded).into_option()?;
-        let compressed = point.to_encoded_point(true);
-
-        Some(Self {
-            compressed,
-            pk_recip,
-        })
+        }
     }
 
     /// Returns the compressed SEC-1 encoding of this recipient.
-    pub(crate) fn to_compressed(&self) -> p256::EncodedPoint {
+    pub(crate) fn to_compressed(&self) -> p256::Sec1Point {
         self.compressed
     }
 
@@ -117,11 +151,12 @@ impl Recipient {
     }
 
     pub(crate) fn wrap_file_key(&self, file_key: &FileKey) -> RecipientLine {
-        let (enc, ct) = hpke_seal::<Kem, _>(
+        let mut csprng = rand::rng();
+        let (enc, ct) = hpke_seal(
             &self.pk_recip,
             P256TAG_SALT.as_bytes(),
             file_key.expose_secret(),
-            &mut OsRng,
+            &mut csprng,
         );
 
         RecipientLine {
@@ -282,7 +317,7 @@ impl<'a> hpke::Kem for YubiKeyDhP256HkdfSha256<'a> {
         Ok(shared_secret)
     }
 
-    fn encap<R: rand::CryptoRng + rand::RngCore>(
+    fn encap<R: rand::rand_core::CryptoRng + rand::rand_core::Rng>(
         _: &Self::PublicKey,
         _: Option<(&Self::PrivateKey, &Self::PublicKey)>,
         _: &mut R,
