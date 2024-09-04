@@ -42,8 +42,8 @@ x509-parser = "0.14"
 yubikey = { version = "=0.8.0-pre.0", features = ["untested"] }
 
 # Translations
-i18n-embed = { version = "0.14", features = ["desktop-requester", "fluent-system"] }
-i18n-embed-fl = "0.8"
+i18n-embed = { version = "0.15", features = ["desktop-requester", "fluent-system"] }
+i18n-embed-fl = "0.9"
 lazy_static = "1"
 rust-embed = "8"
 
