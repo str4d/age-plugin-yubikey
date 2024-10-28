@@ -21,6 +21,8 @@ use yubikey::{
     reader::{Context, Reader},
     Key, MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
+use std::process;
+use std::env;
 
 use crate::{
     error::Error,
@@ -718,6 +720,10 @@ impl Connection {
             _ => false,
         };
 
+        if let Ok(hook_cmd) = env::var("AGE_YUBIKEY_HOOK_DECRYPT") {
+            _ = process::Command::new(hook_cmd).arg("start").spawn()
+        }
+
         // The YubiKey API for performing scalar multiplication takes the point in its
         // uncompressed SEC-1 encoding.
         let shared_secret = match decrypt_data(
@@ -729,6 +735,9 @@ impl Connection {
             Ok(res) => res,
             Err(_) => return Err(()),
         };
+        if let Ok(hook_cmd) = env::var("AGE_YUBIKEY_HOOK_DECRYPT") {
+            _ = process::Command::new(hook_cmd).arg("stop").spawn()
+        }
 
         // If we requested a touch and reached here, the user touched the YubiKey.
         if needs_touch {
