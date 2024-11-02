@@ -327,11 +327,7 @@ fn main() -> Result<(), Error> {
     }
 
     if let Some(state_machine) = opts.age_plugin {
-        run_state_machine(
-            &state_machine,
-            Some(plugin::RecipientPlugin::default),
-            Some(plugin::IdentityPlugin::default),
-        )?;
+        run_state_machine(&state_machine, plugin::Handler)?;
         Ok(())
     } else if opts.version {
         println!("age-plugin-yubikey {}", env!("CARGO_PKG_VERSION"));

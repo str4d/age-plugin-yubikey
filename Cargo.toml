@@ -42,8 +42,8 @@ x509-parser = "0.14"
 yubikey = { version = "=0.8.0-pre.0", features = ["untested"] }
 
 # Translations
-i18n-embed = { version = "0.14", features = ["desktop-requester", "fluent-system"] }
-i18n-embed-fl = "0.8"
+i18n-embed = { version = "0.15", features = ["desktop-requester", "fluent-system"] }
+i18n-embed-fl = "0.9"
 lazy_static = "1"
 rust-embed = "8"
 
@@ -56,3 +56,7 @@ man = "0.3"
 tempfile = "3"
 test-with = "0.11"
 which = "5"
+
+[patch.crates-io]
+age-core = { git = "https://github.com/str4d/rage.git", rev = "baf277a749c839e49f93bffb58d36734ac94be83" }
+age-plugin = { git = "https://github.com/str4d/rage.git", rev = "baf277a749c839e49f93bffb58d36734ac94be83" }

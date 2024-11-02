@@ -2,12 +2,27 @@ use age_core::format::{FileKey, Stanza};
 use age_plugin::{
     identity::{self, IdentityPluginV1},
     recipient::{self, RecipientPluginV1},
-    Callbacks,
+    Callbacks, PluginHandler,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 
 use crate::{fl, format, key, p256::Recipient, PLUGIN_NAME};
+
+pub(crate) struct Handler;
+
+impl PluginHandler for Handler {
+    type RecipientV1 = RecipientPlugin;
+    type IdentityV1 = IdentityPlugin;
+
+    fn recipient_v1(self) -> io::Result<Self::RecipientV1> {
+        Ok(RecipientPlugin::default())
+    }
+
+    fn identity_v1(self) -> io::Result<Self::IdentityV1> {
+        Ok(IdentityPlugin::default())
+    }
+}
 
 #[derive(Debug, Default)]
 pub(crate) struct RecipientPlugin {
@@ -56,6 +71,10 @@ impl RecipientPluginV1 for RecipientPlugin {
                 message: fl!("plugin-err-invalid-identity"),
             })
         }
+    }
+
+    fn labels(&mut self) -> HashSet<String> {
+        HashSet::new()
     }
 
     fn wrap_file_keys(
