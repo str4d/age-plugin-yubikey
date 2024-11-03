@@ -1,7 +1,15 @@
 use std::fmt;
 use std::iter;
 
-use x509_parser::{certificate::X509Certificate, der_parser::oid::Oid};
+use p256::pkcs8::{AssociatedOid, ObjectIdentifier};
+use x509_cert::{
+    der::{
+        self,
+        oid::db::rfc4519::{COMMON_NAME, ORGANIZATION},
+        Decode,
+    },
+    ext::AsExtension,
+};
 use yubikey::{
     piv::{RetiredSlotId, SlotId},
     Certificate, PinPolicy, Serial, TouchPolicy, YubiKey,
@@ -10,7 +18,8 @@ use yubikey::{
 use crate::fl;
 use crate::{error::Error, key::Stub, p256::Recipient, BINARY_NAME, USABLE_SLOTS};
 
-pub(crate) const POLICY_EXTENSION_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 41482, 3, 8];
+pub(crate) const POLICY_EXTENSION_OID: ObjectIdentifier =
+    ObjectIdentifier::new_unwrap("1.3.6.1.4.1.41482.3.8");
 
 pub(crate) fn ui_to_slot(slot: u8) -> Result<RetiredSlotId, Error> {
     // Use 1-indexing in the UI for niceness
@@ -23,6 +32,53 @@ pub(crate) fn ui_to_slot(slot: u8) -> Result<RetiredSlotId, Error> {
 pub(crate) fn slot_to_ui(slot: &RetiredSlotId) -> u8 {
     // Use 1-indexing in the UI for niceness
     USABLE_SLOTS.iter().position(|s| s == slot).unwrap() as u8 + 1
+}
+
+pub(crate) struct UsagePolicies {
+    pub(crate) pin: PinPolicy,
+    pub(crate) touch: TouchPolicy,
+}
+
+impl AssociatedOid for UsagePolicies {
+    const OID: ObjectIdentifier = POLICY_EXTENSION_OID;
+}
+
+impl der::Encode for UsagePolicies {
+    fn encoded_len(&self) -> der::Result<der::Length> {
+        Ok(der::Length::new(2))
+    }
+
+    fn encode(&self, encoder: &mut impl der::Writer) -> der::Result<()> {
+        // TODO: https://github.com/RustCrypto/formats/issues/1490
+        // Is this the correct encoding?
+        encoder.write(&[self.pin.into(), self.touch.into()])
+    }
+}
+
+impl<'a> der::Decode<'a> for UsagePolicies {
+    fn decode<R: der::Reader<'a>>(decoder: &mut R) -> der::Result<Self> {
+        // TODO: https://github.com/RustCrypto/formats/issues/1492
+        let pin = decoder
+            .read_byte()?
+            .try_into()
+            .map_err(|_| decoder.error(der::ErrorKind::Failed))?;
+        let touch = decoder
+            .read_byte()?
+            .try_into()
+            .map_err(|_| decoder.error(der::ErrorKind::Failed))?;
+        Ok(Self { pin, touch })
+    }
+}
+
+impl AsExtension for UsagePolicies {
+    fn critical(
+        &self,
+        _subject: &x509_cert::name::Name,
+        _extensions: &[x509_cert::ext::Extension],
+    ) -> bool {
+        // TODO: https://github.com/RustCrypto/formats/issues/1490
+        false
+    }
 }
 
 pub(crate) fn pin_policy_from_string(s: String) -> Result<PinPolicy, Error> {
@@ -70,17 +126,31 @@ pub(crate) fn otp_serial_prefix(serial: Serial) -> String {
         .collect()
 }
 
-pub(crate) fn extract_name(cert: &X509Certificate, all: bool) -> Option<(String, bool)> {
+pub(crate) fn extract_name(cert: &x509_cert::Certificate, all: bool) -> Option<(String, bool)> {
     // Look at Subject Organization to determine if we created this.
-    match cert.subject().iter_organization().next() {
-        Some(org) if org.as_str() == Ok(BINARY_NAME) => {
+    match cert
+        .tbs_certificate
+        .subject
+        // TODO: https://github.com/RustCrypto/formats/issues/1493
+        // Replicate `iter_organization` from `x509-parser`, or figure out some
+        // other way to reliably access common / predictable parts of a subject. Could
+        // maybe gate a getter on a concrete `Profile` (or on a sub-trait)?
+        .as_ref()
+        .iter()
+        .flat_map(|n| n.as_ref().iter().find(|a| a.oid == ORGANIZATION))
+        .next()
+    {
+        Some(org) if org.value.decode_as::<String>().as_deref() == Ok(BINARY_NAME) => {
             // We store the identity name as a Common Name attribute.
             let name = cert
-                .subject()
-                .iter_common_name()
+                .tbs_certificate
+                .subject
+                // TODO: https://github.com/RustCrypto/formats/issues/1493
+                .as_ref()
+                .iter()
+                .flat_map(|n| n.as_ref().iter().find(|a| a.oid == COMMON_NAME))
                 .next()
-                .and_then(|cn| cn.as_str().ok())
-                .map(|s| s.to_owned())
+                .and_then(|cn| cn.value.decode_as::<String>().ok())
                 .unwrap_or_default(); // TODO: This should always be present.
 
             Some((name, true))
@@ -92,7 +162,7 @@ pub(crate) fn extract_name(cert: &X509Certificate, all: bool) -> Option<(String,
             }
 
             // Display the entire subject.
-            let name = cert.subject().to_string();
+            let name = cert.tbs_certificate.subject.to_string();
 
             Some((name, false))
         }
@@ -115,43 +185,36 @@ impl Metadata {
         cert: &Certificate,
         all: bool,
     ) -> Option<Self> {
-        let (_, cert) = x509_parser::parse_x509_certificate(cert.as_ref()).ok()?;
-
         // We store the PIN and touch policies for identities in their certificates
         // using the same certificate extension as PIV attestations.
         // https://developers.yubico.com/PIV/Introduction/PIV_attestation.html
-        let policies = |c: &X509Certificate| {
+        let policies = |c: &x509_cert::Certificate| {
             c.tbs_certificate
-                .get_extension_unique(&Oid::from(POLICY_EXTENSION_OID).unwrap())
-                // If the extension is duplicated, we assume it is invalid.
+                // TODO: https://github.com/RustCrypto/formats/issues/1491
+                .get::<UsagePolicies>()
                 .ok()
                 .flatten()
-                // If the encoded extension doesn't have 2 bytes, we assume it is invalid.
-                .filter(|policy| policy.value.len() >= 2)
-                .map(|policy| {
-                    // We should only ever see one of three values for either policy, but
-                    // handle unknown values just in case.
-                    let pin_policy = match policy.value[0] {
-                        0x01 => Some(PinPolicy::Never),
-                        0x02 => Some(PinPolicy::Once),
-                        0x03 => Some(PinPolicy::Always),
-                        _ => None,
-                    };
-                    let touch_policy = match policy.value[1] {
-                        0x01 => Some(TouchPolicy::Never),
-                        0x02 => Some(TouchPolicy::Always),
-                        0x03 => Some(TouchPolicy::Cached),
-                        _ => None,
-                    };
-                    (pin_policy, touch_policy)
+                .map(|(_critical, policies)| {
+                    // We should only ever see one of the three concrete values for either
+                    // policy, but handle unknown values just in case.
+                    (
+                        match policies.pin {
+                            PinPolicy::Default => None,
+                            p => Some(p),
+                        },
+                        match policies.touch {
+                            TouchPolicy::Default => None,
+                            p => Some(p),
+                        },
+                    )
                 })
                 .unwrap_or((None, None))
         };
 
-        extract_name(&cert, all)
+        extract_name(&cert.cert, all)
             .map(|(name, ours)| {
                 if ours {
-                    let (pin_policy, touch_policy) = policies(&cert);
+                    let (pin_policy, touch_policy) = policies(&cert.cert);
                     (name, pin_policy, touch_policy)
                 } else {
                     // We can extract the PIN and touch policies via an attestation. This
@@ -160,8 +223,8 @@ impl Metadata {
                         yubikey::piv::attest(yubikey, SlotId::Retired(slot))
                             .ok()
                             .and_then(|buf| {
-                                x509_parser::parse_x509_certificate(&buf)
-                                    .map(|(_, c)| policies(&c))
+                                x509_cert::Certificate::from_der(&buf)
+                                    .map(|c| policies(&c))
                                     .ok()
                             })
                             .unwrap_or((None, None));
@@ -173,11 +236,14 @@ impl Metadata {
                 serial: yubikey.serial(),
                 slot,
                 name,
-                created: cert
-                    .validity()
-                    .not_before
-                    .to_rfc2822()
-                    .unwrap_or_else(|e| format!("Invalid date: {e}")),
+                created: chrono::DateTime::<chrono::Utc>::from(
+                    cert.cert
+                        .tbs_certificate
+                        .validity
+                        .not_before
+                        .to_system_time(),
+                )
+                .to_rfc2822(),
                 pin_policy,
                 touch_policy,
             })

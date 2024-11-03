@@ -1,5 +1,7 @@
 use std::fmt;
 use std::io;
+
+use x509_cert::der;
 use yubikey::{piv::RetiredSlotId, Serial};
 
 use crate::util::slot_to_ui;
@@ -14,6 +16,7 @@ macro_rules! wlnfl {
 }
 
 pub enum Error {
+    Build(der::Error),
     CustomManagementKey,
     Dialog(dialoguer::Error),
     InvalidFlagCommand(String, String),
@@ -63,6 +66,7 @@ impl fmt::Debug for Error {
         const CHANGE_MGMT_KEY_URL: &str = "https://developers.yubico.com/yubikey-manager/";
 
         match self {
+            Error::Build(e) => wlnfl!(f, "err-build", err = e.to_string())?,
             Error::CustomManagementKey => {
                 wlnfl!(f, "err-custom-mgmt-key")?;
                 wlnfl!(

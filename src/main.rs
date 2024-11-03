@@ -399,15 +399,12 @@ fn main() -> Result<(), Error> {
                     .map(|(key, _, recipient)| {
                         recipient.as_ref().map(|_| {
                             // Cache the details we need to display to the user.
-                            let (_, cert) =
-                                x509_parser::parse_x509_certificate(key.certificate().as_ref())
-                                    .unwrap();
-                            let (name, _) = util::extract_name(&cert, true).unwrap();
-                            let created = cert
-                                .validity()
-                                .not_before
-                                .to_rfc2822()
-                                .unwrap_or_else(|e| format!("Invalid date: {e}"));
+                            let cert = &key.certificate().cert;
+                            let (name, _) = util::extract_name(cert, true).unwrap();
+                            let created = chrono::DateTime::<chrono::Utc>::from(
+                                cert.tbs_certificate.validity.not_before.to_system_time(),
+                            )
+                            .to_rfc2822();
 
                             format!("{name}, created: {created}")
                         })
