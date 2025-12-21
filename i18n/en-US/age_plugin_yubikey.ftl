@@ -187,6 +187,8 @@ plugin-err-pin-required     = A PIN is required for {-yubikey} with serial {$yub
 
 ## Errors
 
+err-build = Failed to build identity: {$err}
+
 err-mgmt-key-auth = Failed to authenticate with the PIN-protected management key.
 rec-mgmt-key-auth =
     Check whether your management key is using the TDES algorithm.
