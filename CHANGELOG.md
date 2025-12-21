@@ -15,7 +15,7 @@ to 0.3.0 are beta releases.
     support for this new native recipient type.
 
 ### Changed
-- MSRV is now 1.70.0.
+- MSRV is now 1.74.0.
 - Encryption to an identity now uses the preferred recipient type supported for
   that identity.
 - `age-plugin-yubikey` now prints `age1tag1..` recipients in its CLI and

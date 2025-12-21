@@ -25,7 +25,7 @@ impl<'a, Kem> YubiKeyKemPrivateKey<'a, Kem> {
     fn new(conn: &'a mut Connection) -> Self {
         Self {
             conn: Rc::new(RwLock::new(conn)),
-            _kem: PhantomData::default(),
+            _kem: PhantomData,
         }
     }
 }
@@ -34,7 +34,7 @@ impl<'a, Kem> Clone for YubiKeyKemPrivateKey<'a, Kem> {
     fn clone(&self) -> Self {
         Self {
             conn: self.conn.clone(),
-            _kem: PhantomData::default(),
+            _kem: PhantomData,
         }
     }
 }
