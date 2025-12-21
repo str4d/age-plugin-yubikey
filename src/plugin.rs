@@ -7,7 +7,11 @@ use age_plugin::{
 use std::collections::{HashMap, HashSet};
 use std::io;
 
-use crate::{fl, key, native::p256tag, piv_p256, Recipient, PLUGIN_NAME};
+use crate::{
+    fl, key,
+    native::{mlkem768p256tag, p256tag},
+    piv_p256, Recipient, PLUGIN_NAME,
+};
 
 pub(crate) struct Handler;
 
@@ -274,6 +278,7 @@ impl IdentityPluginV1 for IdentityPlugin {
 enum SupportedStanza {
     PivP256(piv_p256::RecipientLine),
     P256Tag(p256tag::RecipientLine),
+    MlKem768P256Tag(mlkem768p256tag::RecipientLine),
 }
 
 impl SupportedStanza {
@@ -281,7 +286,11 @@ impl SupportedStanza {
         piv_p256::RecipientLine::from_stanza(&stanza)
             .map(|res| res.map(Self::PivP256))
             .or_else(|| {
-                p256tag::RecipientLine::from_stanza(stanza).map(|res| res.map(Self::P256Tag))
+                p256tag::RecipientLine::from_stanza(&stanza).map(|res| res.map(Self::P256Tag))
+            })
+            .or_else(|| {
+                mlkem768p256tag::RecipientLine::from_stanza(stanza)
+                    .map(|res| res.map(Self::MlKem768P256Tag))
             })
     }
 
@@ -289,6 +298,7 @@ impl SupportedStanza {
         match self {
             SupportedStanza::PivP256(line) => stub.tag == line.tag,
             SupportedStanza::P256Tag(line) => line.matches_stub(stub),
+            SupportedStanza::MlKem768P256Tag(line) => line.matches_stub(stub),
         }
     }
 
@@ -296,6 +306,7 @@ impl SupportedStanza {
         match self {
             SupportedStanza::PivP256(line) => line.unwrap_file_key(conn),
             SupportedStanza::P256Tag(line) => line.unwrap_file_key(conn),
+            SupportedStanza::MlKem768P256Tag(line) => line.unwrap_file_key(conn),
         }
     }
 }

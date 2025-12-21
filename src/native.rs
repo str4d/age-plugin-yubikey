@@ -7,6 +7,7 @@ use sha2::Sha256;
 
 use crate::key::Connection;
 
+pub(crate) mod mlkem768p256tag;
 pub(crate) mod p256tag;
 
 /// Derives a tag for the tagged age recipient formats.

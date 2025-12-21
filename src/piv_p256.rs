@@ -145,6 +145,7 @@ impl RecipientLine {
             crate::recipient::Recipient::P256Tag(recipient) => {
                 (recipient.static_tag(), recipient.to_compressed())
             }
+            _ => panic!("should have already been filtered out"),
         };
         assert_eq!(self.tag, static_tag);
 
