@@ -5,7 +5,7 @@ use p256::pkcs8::{AssociatedOid, ObjectIdentifier};
 use x509_cert::{
     der::{
         self,
-        oid::db::rfc4519::{COMMON_NAME, ORGANIZATION},
+        oid::db::rfc4519::{COMMON_NAME, ORGANIZATION_NAME as ORGANIZATION},
         Decode,
     },
     ext::AsExtension,
