@@ -74,6 +74,7 @@ cli-setup-slot-usable         = Slot {$slot_index} ({$slot_name})
 cli-setup-slot-unusable       = Slot {$slot_index} (Unusable)
 cli-setup-slot-empty          = Slot {$slot_index} (Empty)
 cli-setup-select-slot         = 🕳️  Select a slot for your {-age} identity
+cli-setup-select-identity-type= 🏷️  Select the identity type
 cli-setup-name-identity       = 📛 Name this identity
 cli-setup-select-pin-policy   = 🔤 Select a PIN policy
 cli-setup-select-touch-policy = 👆 Select a touch policy
@@ -203,6 +204,7 @@ rec-change-mgmt-key =
 
 err-invalid-flag-command = Flag '{$flag}' cannot be used with '{$command}'.
 err-invalid-flag-tui     = Flag '{$flag}' cannot be used with the interactive interface.
+err-invalid-identity-type= Invalid identity type '{$kind}' (expected [{$expected}]).
 err-invalid-pin-policy   = Invalid PIN policy '{$policy}' (expected [{$expected}]).
 err-invalid-slot         = Invalid slot '{$slot}' (expected number between 1 and 20).
 err-invalid-touch-policy = Invalid touch policy '{$policy}' (expected [{$expected}]).
