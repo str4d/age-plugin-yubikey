@@ -7,7 +7,7 @@ use x509_cert::{
     der::{
         self,
         asn1::OctetString,
-        oid::db::rfc4519::{COMMON_NAME, ORGANIZATION},
+        oid::db::rfc4519::{COMMON_NAME, ORGANIZATION_NAME},
         Decode,
     },
     ext::{Criticality, ToExtension},
@@ -18,10 +18,15 @@ use yubikey::{
 };
 
 use crate::fl;
+use crate::native::p256tag;
+use crate::native::x25519tag;
 use crate::{error::Error, key::Stub, Recipient, BINARY_NAME, USABLE_SLOTS};
 
 pub(crate) const POLICY_EXTENSION_OID: ObjectIdentifier =
     ObjectIdentifier::new_unwrap("1.3.6.1.4.1.41482.3.8");
+const YUBIKEY_ATTESTATION: &str = "YubiKey PIV Attestation";
+
+pub(crate) const OID_RSA: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.1");
 
 pub(crate) fn ui_to_slot(slot: u8) -> Result<RetiredSlotId, Error> {
     // Use 1-indexing in the UI for niceness
@@ -168,7 +173,7 @@ pub(crate) fn extract_name_and_version(
         // maybe gate a getter on a concrete `Profile` (or on a sub-trait)?
         .as_ref()
         .iter()
-        .flat_map(|n| n.as_ref().iter().find(|a| a.oid == ORGANIZATION))
+        .flat_map(|n| n.as_ref().iter().find(|a| a.oid == ORGANIZATION_NAME))
         .next()
     {
         Some(org) if org.value.decode_as::<String>().as_deref() == Ok(BINARY_NAME) => {
@@ -196,15 +201,33 @@ pub(crate) fn extract_name_and_version(
             Some((name, Some(version)))
         }
         _ => {
-            // Not one of ours, but we've already filtered for compatibility.
-            if !all {
-                return None;
+            match cert
+                .tbs_certificate()
+                .subject_public_key_info()
+                .algorithm
+                .oid
+            {
+                x25519tag::OID_X25519 => {
+                    let name = cert.tbs_certificate().subject().to_string();
+                    if name.contains(YUBIKEY_ATTESTATION) {
+                        return Some((name, Some("".to_string())));
+                    } else if !all {
+                        return None;
+                    }
+                    Some((name, None))
+                }
+                _ => {
+                    // Not one of ours, but we've already filtered for compatibility.
+                    if !all {
+                        return None;
+                    }
+
+                    // Display the entire subject.
+                    let name = cert.tbs_certificate().subject().to_string();
+
+                    Some((name, None))
+                }
             }
-
-            // Display the entire subject.
-            let name = cert.tbs_certificate().subject().to_string();
-
-            Some((name, None))
         }
     }
 }
@@ -215,6 +238,7 @@ pub(crate) struct Metadata {
     name: String,
     version: Option<String>,
     created: String,
+    algorithm: ObjectIdentifier,
     pub(crate) pin_policy: Option<PinPolicy>,
     pub(crate) touch_policy: Option<TouchPolicy>,
 }
@@ -283,6 +307,7 @@ impl Metadata {
                         .to_system_time(),
                 )
                 .to_rfc2822(),
+                algorithm: cert.subject_pki().algorithm.oid,
                 pin_policy,
                 touch_policy,
             })
@@ -290,15 +315,20 @@ impl Metadata {
 
     /// Returns `true` if this identity was generated with an `age-plugin-yubikey` version
     /// before `p256tag` was added (and became the default).
-    pub(crate) fn is_pre_p256tag(&self) -> bool {
-        self.version
-            .as_ref()
-            .and_then(|version| version.split_once('.'))
-            .and_then(|(major, rest)| rest.split_once('.').map(|(minor, _)| (major, minor)))
-            .is_some_and(|(major, minor)| {
-                // `p256tag` added in v0.6.0
-                major == "0" && minor.parse::<u8>().is_ok_and(|minor| minor < 6)
-            })
+    pub(crate) fn is_pre_native_tag(&self) -> bool {
+        match self.algorithm {
+            x25519tag::OID_X25519 => self.name.contains(YUBIKEY_ATTESTATION),
+            p256tag::OID_P256 => self
+                .version
+                .as_ref()
+                .and_then(|version| version.split_once('.'))
+                .and_then(|(major, rest)| rest.split_once('.').map(|(minor, _)| (major, minor)))
+                .is_some_and(|(major, minor)| {
+                    // `p256tag` added in v0.6.0
+                    major == "0" && minor.parse::<u8>().is_ok_and(|minor| minor < 6)
+                }),
+            _ => false,
+        }
     }
 }
 

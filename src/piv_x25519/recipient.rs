@@ -1,14 +1,12 @@
 use age_core::primitives::bech32_encode_to_fmt;
 use sha2::{Digest, Sha256};
 use x25519_dalek::PublicKey;
-use x509_cert::spki::SubjectPublicKeyInfoRef;
-use yubikey::Certificate;
 
 use std::fmt;
 
 use crate::recipient::TAG_BYTES;
 
-const RECIPIENT_PREFIX: bech32::Hrp = bech32::Hrp::parse_unchecked("age1tag");
+const RECIPIENT_PREFIX: bech32::Hrp = bech32::Hrp::parse_unchecked("age1yubikey");
 
 #[derive(Clone)]
 pub struct Recipient(PublicKey);
@@ -33,23 +31,6 @@ impl Recipient {
             Ok(pubkey) => Some(Self(pubkey)),
             _ => None,
         }
-    }
-
-    pub(crate) fn from_certificate(cert: &Certificate) -> Option<Self> {
-        Self::from_spki(cert.subject_pki())
-    }
-
-    pub(crate) fn from_spki(spki: SubjectPublicKeyInfoRef<'_>) -> Option<Self> {
-        let pk_data: [u8; 32] = spki
-            .subject_public_key
-            .raw_bytes()
-            .try_into()
-            .expect("spki bytes");
-        Some(Self(x25519_dalek::PublicKey::from(pk_data)))
-    }
-
-    pub(crate) fn as_bytes(&self) -> &[u8] {
-        self.0.as_bytes()
     }
 
     pub(crate) fn tag(&self) -> [u8; TAG_BYTES] {

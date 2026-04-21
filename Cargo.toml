@@ -33,7 +33,7 @@ env_logger = "0.10"
 gumdrop = "0.8"
 hex = "0.4"
 hkdf = "0.13"
-hpke = { version = "=0.14.0-pre.1", default-features = false, features = ["alloc", "p256"] }
+hpke = { version = "=0.14.0-pre.1", default-features = false, features = ["alloc", "p256", "x25519"] }
 log = "0.4"
 p256 = { version = "0.14.0-pre.11", features = ["ecdh", "pkcs8"] }
 pcsc = "2.4"

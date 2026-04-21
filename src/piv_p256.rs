@@ -17,7 +17,7 @@ use crate::{key::Connection, recipient::TAG_BYTES, util::base64_arg};
 mod recipient;
 pub(crate) use recipient::Recipient;
 
-const STANZA_TAG: &str = "piv-p256";
+pub(crate) const STANZA_TAG: &str = "piv-p256";
 pub(crate) const STANZA_KEY_LABEL: &[u8] = b"piv-p256";
 
 const EPK_BYTES: usize = 33;
@@ -136,6 +136,7 @@ impl RecipientLine {
             crate::recipient::Recipient::P256Tag(recipient) => {
                 (recipient.static_tag(), recipient.to_compressed())
             }
+            _ => panic!("Unsupported algorithm"),
         };
         assert_eq!(self.tag, static_tag);
 
@@ -143,7 +144,7 @@ impl RecipientLine {
 
         // The YubiKey API for performing scalar multiplication takes the point in its
         // uncompressed SEC-1 encoding.
-        let shared_secret = conn.p256_ecdh(self.epk_bytes.decompress().as_bytes())?;
+        let shared_secret = conn.ecdh(self.epk_bytes.decompress().as_bytes())?;
 
         let enc_key = hkdf(&salt, STANZA_KEY_LABEL, shared_secret.as_ref());
 

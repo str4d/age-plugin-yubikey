@@ -1,9 +1,5 @@
 use age_core::primitives::bech32_encode_to_fmt;
-use p256::{
-    elliptic_curve::sec1::{FromSec1Point, ToSec1Point},
-    pkcs8::SubjectPublicKeyInfoRef,
-};
-use yubikey::Certificate;
+use p256::elliptic_curve::sec1::{FromSec1Point, ToSec1Point};
 
 use std::fmt;
 
@@ -36,15 +32,6 @@ impl Recipient {
         } else {
             None
         }
-    }
-
-    pub(crate) fn from_certificate(cert: &Certificate) -> Option<Self> {
-        Self::from_spki(cert.subject_pki())
-    }
-
-    pub(crate) fn from_spki(spki: SubjectPublicKeyInfoRef<'_>) -> Option<Self> {
-        // TODO: https://github.com/RustCrypto/formats/issues/1604
-        p256::PublicKey::try_from(spki).ok().map(Recipient)
     }
 
     /// Attempts to parse a valid YubiKey recipient from its SEC-1 encoding.

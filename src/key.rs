@@ -20,6 +20,7 @@ use yubikey::{
     Key, MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
+use crate::native::x25519tag;
 use crate::{
     error::Error,
     fl,
@@ -407,8 +408,10 @@ pub(crate) fn identify_recipient(cert: &Certificate) -> Option<Recipient> {
                 .count()
                 > (0 as usize)
         }
-        None => return None,
-    } {}
+        None => true,
+    } {
+        return None;
+    }
     //     .extract_if(.., |ext| {
     //         ext.critical && !known_oids.contains(&&ext.extn_id)
     //     })
@@ -418,7 +421,13 @@ pub(crate) fn identify_recipient(cert: &Certificate) -> Option<Recipient> {
     //     return None;
     // }
 
-    p256tag::Recipient::from_certificate(cert).map(Recipient::P256Tag)
+    match cert.subject_pki().algorithm.oid {
+        p256tag::OID_P256 => p256tag::Recipient::from_certificate(cert).map(Recipient::P256Tag),
+        x25519tag::OID_X25519 => {
+            x25519tag::Recipient::from_certificate(cert).map(Recipient::X25519Tag)
+        }
+        _ => None,
+    }
 }
 
 /// Returns an iterator of keys that are occupying plugin-compatible slots, along with the
@@ -732,12 +741,14 @@ impl Connection {
         Ok(Ok(()))
     }
 
-    pub(crate) fn p256_ecdh(&mut self, epk_bytes: &[u8]) -> Result<yubikey::Buffer, ()> {
-        // The YubiKey API for performing scalar multiplication takes the point in its
-        // uncompressed SEC-1 encoding.
-        assert_eq!(epk_bytes.len(), 65);
-
+    pub(crate) fn ecdh(&mut self, epk_bytes: &[u8]) -> Result<yubikey::Buffer, ()> {
+        // The YubiKey API for performing scalar multiplication
         let algorithm = self.pk.algorithm();
+        match algorithm {
+            yubikey::piv::AlgorithmId::X25519 => assert_eq!(epk_bytes.len(), 32),
+            yubikey::piv::AlgorithmId::EccP256 => assert_eq!(epk_bytes.len(), 65),
+            _ => panic!("Unsupported algorithm"),
+        }
 
         // Check if the touch policy requires a touch.
         let needs_touch = match (

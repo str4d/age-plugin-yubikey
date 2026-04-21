@@ -8,6 +8,9 @@ use sha2::Sha256;
 use crate::key::Connection;
 
 pub(crate) mod p256tag;
+pub(crate) mod x25519tag;
+
+pub(crate) const PLUGIN_NAME: &str = "tag";
 
 /// Derives a tag for the tagged age recipient formats.
 fn stanza_tag(ikm: &[u8], salt: &str) -> [u8; 4] {

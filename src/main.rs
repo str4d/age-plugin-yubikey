@@ -12,7 +12,8 @@ use i18n_embed::{
 };
 use lazy_static::lazy_static;
 use rust_embed::RustEmbed;
-use yubikey::piv::AlgorithmId;
+use yubikey::piv::{AlgorithmId, SlotId};
+use yubikey::Key;
 use yubikey::{piv::RetiredSlotId, reader::Context, PinPolicy, Serial, TouchPolicy};
 
 mod builder;
@@ -427,7 +428,18 @@ fn main() -> Result<(), Error> {
             None => return Ok(()),
         };
 
-        let keys = key::list_slots(&mut yubikey)?.collect::<Vec<_>>();
+        let keys = key::list_slots(&mut yubikey)?
+            .map(|(k, s, r)| match r {
+                Some(r) => {
+                    if r.algorithm() == algorithm {
+                        (k, s, Some(r))
+                    } else {
+                        (k, s, None)
+                    }
+                }
+                None => (k, s, r),
+            })
+            .collect::<Vec<_>>();
 
         // Identify slots that we can't allow the user to select.
         let slot_details: Vec<_> = USABLE_SLOTS
@@ -513,7 +525,21 @@ fn main() -> Result<(), Error> {
                 }
             } else {
                 let name = match algorithm {
-                    AlgorithmId::X25519 => String::from(""),
+                    AlgorithmId::X25519 => {
+                        let all_keys = Key::list(&mut yubikey)?;
+                        match all_keys.iter().find(|p| p.slot() == SlotId::Signature) {
+                            Some(_) => Input::<String>::new()
+                                .with_prompt(format!(
+                                    "{} [{}]",
+                                    fl!("cli-setup-name-identity"),
+                                    flags.name.as_deref().unwrap_or("age identity TAG_HEX")
+                                ))
+                                .allow_empty(true)
+                                .report(true)
+                                .interact_text()?,
+                            None => String::from(""),
+                        }
+                    }
                     _ => Input::<String>::new()
                         .with_prompt(format!(
                             "{} [{}]",
