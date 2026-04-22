@@ -526,6 +526,8 @@ fn main() -> Result<(), Error> {
             } else {
                 let name = match algorithm {
                     AlgorithmId::X25519 => {
+                        // Skip TAG_HEX prompt if we don't have a signing key and need to fallback
+                        // to a YubiKey attestation certificate.
                         let all_keys = Key::list(&mut yubikey)?;
                         match all_keys.iter().find(|p| p.slot() == SlotId::Signature) {
                             Some(_) => Input::<String>::new()

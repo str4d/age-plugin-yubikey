@@ -149,9 +149,6 @@ impl IdentityBuilder {
         let generated_ref: SubjectPublicKeyInfoRef =
             SubjectPublicKeyInfoOwned::owned_to_ref(&generated);
 
-        // TODO: https://github.com/RustCrypto/formats/issues/1488
-        // Document `OwnedToRef` usage in top-level docs somewhere (either of the
-        // crate, or of `SubjectPublicKeyInfoOwned` so we know how to get a reference).
         let recipient =
             Recipient::from_spki(generated_ref).expect("YubiKey generates a valid pubkey");
         let stub = Stub::new(yubikey.serial(), slot, &recipient);
@@ -181,11 +178,13 @@ impl IdentityBuilder {
             yubikey.verify_pin(pin.as_bytes())?;
         }
 
-        // TODO: https://github.com/iqlusioninc/yubikey.rs/issues/581
         match algorithm {
             AlgorithmId::X25519 => {
                 let keys = Key::list(yubikey)?;
                 let sign_key = keys.iter().find(|p| p.slot() == SlotId::Signature);
+
+                // Either use an available signing key or use the builtin YubiKey attestation to
+                // generate a certificate since x25519 keys cannot sign for themselves.
                 let cert = match sign_key {
                     Some(key) => {
                         let mut builder = CertificateBuilder::new(
@@ -312,8 +311,6 @@ impl IdentityBuilder {
                         .parse()
                         .map_err(Error::Build)?,
                     generated,
-                    // TODO: https://github.com/RustCrypto/formats/issues/1490
-                    // TODO: https://github.com/iqlusioninc/yubikey.rs/issues/580
                     |builder| {
                         builder.add_extension(&policies).map_err(|e| match e {
                             _ => panic!("Cannot handle this error with the yubikey 0.8 crate: {e}"),

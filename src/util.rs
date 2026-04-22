@@ -56,8 +56,6 @@ impl der::Encode for UsagePolicies {
     }
 
     fn encode(&self, encoder: &mut impl der::Writer) -> der::Result<()> {
-        // TODO: https://github.com/RustCrypto/formats/issues/1490
-        // Is this the correct encoding?
         encoder.write(&[self.pin.into(), self.touch.into()])
     }
 }
@@ -66,7 +64,6 @@ impl<'a> der::Decode<'a> for UsagePolicies {
     type Error = der::Error;
 
     fn decode<R: der::Reader<'a>>(decoder: &mut R) -> der::Result<Self> {
-        // TODO: https://github.com/RustCrypto/formats/issues/1492
         let pin = decoder
             .read_byte()?
             .try_into()
@@ -86,7 +83,6 @@ impl ToExtension for UsagePolicies {
         _subject: &x509_cert::name::Name,
         _extensions: &[x509_cert::ext::Extension],
     ) -> Result<x509_cert::ext::Extension, Self::Error> {
-        // TODO: https://github.com/RustCrypto/formats/issues/1490
         let extn_value: &[u8; 21] = b"1.3.6.1.4.1.41482.3.8";
         Ok(x509_cert::ext::Extension {
             extn_id: POLICY_EXTENSION_OID,
@@ -167,10 +163,6 @@ pub(crate) fn extract_name_and_version(
     match cert
         .tbs_certificate()
         .subject()
-        // TODO: https://github.com/RustCrypto/formats/issues/1493
-        // Replicate `iter_organization` from `x509-parser`, or figure out some
-        // other way to reliably access common / predictable parts of a subject. Could
-        // maybe gate a getter on a concrete `Profile` (or on a sub-trait)?
         .as_ref()
         .iter()
         .flat_map(|n| n.as_ref().iter().find(|a| a.oid == ORGANIZATION_NAME))
@@ -181,7 +173,6 @@ pub(crate) fn extract_name_and_version(
             let name = cert
                 .tbs_certificate()
                 .subject()
-                // TODO: https://github.com/RustCrypto/formats/issues/1493
                 .as_ref()
                 .iter()
                 .flat_map(|n| n.as_ref().iter().find(|a| a.oid == COMMON_NAME))
@@ -208,8 +199,10 @@ pub(crate) fn extract_name_and_version(
                 .oid
             {
                 x25519tag::OID_X25519 => {
+                    // Treat any YubiKey attested cert with an x25519 key as an age key.
                     let name = cert.tbs_certificate().subject().to_string();
                     if name.contains(YUBIKEY_ATTESTATION) {
+                        // Need to return something for version
                         return Some((name, Some("".to_string())));
                     } else if !all {
                         return None;
@@ -255,7 +248,6 @@ impl Metadata {
         // https://developers.yubico.com/PIV/Introduction/PIV_attestation.html
         let policies = |c: &x509_cert::Certificate| {
             c.tbs_certificate()
-                // TODO: https://github.com/RustCrypto/formats/issues/1491
                 .get_extension::<UsagePolicies>()
                 .ok()
                 .flatten()
@@ -317,6 +309,7 @@ impl Metadata {
     /// before `p256tag` was added (and became the default).
     pub(crate) fn is_pre_native_tag(&self) -> bool {
         match self.algorithm {
+            // Treat any x25519 key with YubiKey attested cert as legacy key
             x25519tag::OID_X25519 => self.name.contains(YUBIKEY_ATTESTATION),
             p256tag::OID_P256 => self
                 .version

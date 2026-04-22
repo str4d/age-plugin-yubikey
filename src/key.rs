@@ -412,14 +412,6 @@ pub(crate) fn identify_recipient(cert: &Certificate) -> Option<Recipient> {
     } {
         return None;
     }
-    //     .extract_if(.., |ext| {
-    //         ext.critical && !known_oids.contains(&&ext.extn_id)
-    //     })
-    //     .count()
-    //     > &(0 as usize)
-    // {
-    //     return None;
-    // }
 
     match cert.subject_pki().algorithm.oid {
         p256tag::OID_P256 => p256tag::Recipient::from_certificate(cert).map(Recipient::P256Tag),
