@@ -1,6 +1,7 @@
 use std::time::SystemTime;
 
 use dialoguer::Password;
+use hpke::Kem;
 use spki::{der::referenced::OwnedToRef, SubjectPublicKeyInfoOwned, SubjectPublicKeyInfoRef};
 use x509_cert::{
     builder::{profile::BuilderProfile, Builder, CertificateBuilder},
@@ -11,7 +12,7 @@ use x509_cert::{
 };
 use yubikey::{
     certificate::{yubikey_signer, CertInfo, Certificate},
-    piv::{generate as yubikey_generate, AlgorithmId, RetiredSlotId, SlotId},
+    piv::{generate as yubikey_generate, RetiredSlotId, SlotId},
     Key, PinPolicy, TouchPolicy, YubiKey,
 };
 
@@ -19,12 +20,13 @@ use crate::{
     error::Error,
     fl,
     key::{self, Stub},
-    native::p256tag,
-    util::{Metadata, UsagePolicies, OID_RSA},
+    native::{mlkem768x25519tag, p256tag},
+    plugin::SupportedTag,
+    util::{Metadata, MlKem768Extension, UsagePolicies, OID_RSA},
     Recipient, BINARY_NAME, USABLE_SLOTS,
 };
 
-pub(crate) const DEFAULT_ALGORITHM: AlgorithmId = AlgorithmId::EccP256;
+pub(crate) const DEFAULT_TAG: SupportedTag = SupportedTag::P256Tag;
 pub(crate) const DEFAULT_PIN_POLICY: PinPolicy = PinPolicy::Once;
 pub(crate) const DEFAULT_TOUCH_POLICY: TouchPolicy = TouchPolicy::Always;
 
@@ -58,7 +60,7 @@ impl BuilderProfile for SelfSigned {
 }
 
 pub(crate) struct IdentityBuilder {
-    algorithm: Option<AlgorithmId>,
+    tag: Option<SupportedTag>,
     slot: Option<RetiredSlotId>,
     force: bool,
     name: Option<String>,
@@ -67,9 +69,9 @@ pub(crate) struct IdentityBuilder {
 }
 
 impl IdentityBuilder {
-    pub(crate) fn new(algorithm: Option<AlgorithmId>, slot: Option<RetiredSlotId>) -> Self {
+    pub(crate) fn new(tag: Option<SupportedTag>, slot: Option<RetiredSlotId>) -> Self {
         IdentityBuilder {
-            algorithm,
+            tag,
             slot,
             name: None,
             pin_policy: None,
@@ -99,7 +101,7 @@ impl IdentityBuilder {
     }
 
     pub(crate) fn build(self, yubikey: &mut YubiKey) -> Result<(Stub, Recipient, Metadata), Error> {
-        let algorithm = self.algorithm.unwrap_or(DEFAULT_ALGORITHM);
+        let tag = self.tag.unwrap_or(DEFAULT_TAG);
         let slot = match self.slot {
             Some(slot) => {
                 if !self.force {
@@ -142,7 +144,7 @@ impl IdentityBuilder {
         let generated = yubikey_generate(
             yubikey,
             SlotId::Retired(slot),
-            algorithm,
+            tag.algorithm(),
             policies.pin,
             policies.touch,
         )?;
@@ -178,8 +180,8 @@ impl IdentityBuilder {
             yubikey.verify_pin(pin.as_bytes())?;
         }
 
-        match algorithm {
-            AlgorithmId::X25519 => {
+        match tag {
+            SupportedTag::X25519Tag | SupportedTag::MlKem768X25519Tag => {
                 let keys = Key::list(yubikey)?;
                 let sign_key = keys.iter().find(|p| p.slot() == SlotId::Signature);
 
@@ -212,6 +214,18 @@ impl IdentityBuilder {
                                 ),
                             })
                             .unwrap();
+                        if tag == SupportedTag::MlKem768X25519Tag {
+                            let mut csprng = rand::rng();
+                            let (dk, _ek) =
+                                mlkem768x25519tag::MlKem768X25519::gen_keypair(&mut csprng);
+                            let kem_policy = MlKem768Extension::from_bytes(dk.as_bytes());
+                            builder
+                                .add_extension(&kem_policy)
+                                .map_err(|e| match e {
+                                    _ => panic!("Cannot add ML-KEM seed to certificate"),
+                                })
+                                .unwrap();
+                        }
                         // Match yubikey signer to signing key algorithm. Only supports RSA or P256
                         // without adding another external library.
                         let cert = match key.certificate().subject_pki().algorithm.oid {
@@ -286,13 +300,23 @@ impl IdentityBuilder {
                 };
                 let metadata = Metadata::extract(yubikey, slot, &cert, true).unwrap();
 
-                Ok((
-                    Stub::new(yubikey.serial(), slot, &recipient),
-                    recipient,
-                    metadata,
-                ))
+                match tag {
+                    SupportedTag::MlKem768X25519Tag => {
+                        let recipient = Recipient::from_certificate(&cert).unwrap();
+                        Ok((
+                            Stub::new(yubikey.serial(), slot, &recipient),
+                            recipient,
+                            metadata,
+                        ))
+                    }
+                    _ => Ok((
+                        Stub::new(yubikey.serial(), slot, &recipient),
+                        recipient,
+                        metadata,
+                    )),
+                }
             }
-            _ => {
+            SupportedTag::P256Tag => {
                 if let TouchPolicy::Never = policies.touch {
                     // No need to touch YubiKey
                 } else {

@@ -3,12 +3,13 @@ use std::fmt;
 use age_core::format::{FileKey, Stanza};
 use sha2::{Digest, Sha256};
 use x509_cert::spki::SubjectPublicKeyInfoRef;
-use yubikey::piv::AlgorithmId;
+use yubikey::Certificate;
 
 use crate::{
-    native::{self, p256tag, x25519tag},
+    native::{self, mlkem768x25519tag, p256tag, x25519tag},
     piv_p256, piv_x25519,
-    util::Metadata,
+    plugin::SupportedTag,
+    util::{Metadata, MlKem768Extension},
     PLUGIN_NAME,
 };
 
@@ -20,6 +21,7 @@ pub(crate) enum Recipient {
     P256Tag(p256tag::Recipient),
     PivX25519(piv_x25519::Recipient),
     X25519Tag(x25519tag::Recipient),
+    MlKem768X25519(mlkem768x25519tag::Recipient),
 }
 
 impl fmt::Display for Recipient {
@@ -29,6 +31,7 @@ impl fmt::Display for Recipient {
             Recipient::P256Tag(recipient) => recipient.fmt(f),
             Recipient::PivX25519(recipient) => recipient.fmt(f),
             Recipient::X25519Tag(recipient) => recipient.fmt(f),
+            Recipient::MlKem768X25519(recipient) => recipient.fmt(f),
         }
     }
 }
@@ -51,14 +54,18 @@ impl Recipient {
                     p256tag::Recipient::from_bytes(bytes).map(Self::P256Tag)
                 }
             }
+            native::PLUGIN_PQ_NAME => {
+                mlkem768x25519tag::Recipient::from_bytes(bytes).map(Self::MlKem768X25519)
+            }
             _ => None,
         }
     }
 
-    pub(crate) fn algorithm(&self) -> AlgorithmId {
+    pub(crate) fn identity_tag(&self) -> SupportedTag {
         match self {
-            Self::PivP256(_) | Self::P256Tag(_) => AlgorithmId::EccP256,
-            Self::PivX25519(_) | Self::X25519Tag(_) => AlgorithmId::X25519,
+            Self::PivP256(_) | Self::P256Tag(_) => SupportedTag::P256Tag,
+            Self::PivX25519(_) | Self::X25519Tag(_) => SupportedTag::X25519Tag,
+            Self::MlKem768X25519(_) => SupportedTag::MlKem768X25519Tag,
         }
     }
 
@@ -66,6 +73,25 @@ impl Recipient {
         match spki.algorithm.oid {
             p256tag::OID_P256 => p256tag::Recipient::from_spki(spki).map(Self::P256Tag),
             x25519tag::OID_X25519 => x25519tag::Recipient::from_spki(spki).map(Self::X25519Tag),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn from_certificate(cert: &Certificate) -> Option<Self> {
+        match cert.subject_pki().algorithm.oid {
+            p256tag::OID_P256 => Self::from_spki(cert.subject_pki()),
+            x25519tag::OID_X25519 => {
+                match cert
+                    .cert
+                    .tbs_certificate()
+                    .get_extension::<MlKem768Extension>()
+                    .expect("decode extension")
+                {
+                    Some(_) => mlkem768x25519tag::Recipient::from_certificate(cert)
+                        .map(Self::MlKem768X25519),
+                    None => Self::from_spki(cert.subject_pki()),
+                }
+            }
             _ => None,
         }
     }
@@ -97,6 +123,7 @@ impl Recipient {
             Recipient::P256Tag(recipient) => recipient.static_tag(),
             Recipient::PivX25519(recipient) => recipient.tag(),
             Recipient::X25519Tag(recipient) => recipient.static_tag(),
+            Recipient::MlKem768X25519(recipient) => recipient.static_tag(),
         }
     }
 
@@ -106,6 +133,7 @@ impl Recipient {
             Recipient::P256Tag(recipient) => recipient.wrap_file_key(file_key).into(),
             Recipient::PivX25519(recipient) => recipient.wrap_file_key(file_key).into(),
             Recipient::X25519Tag(recipient) => recipient.wrap_file_key(file_key).into(),
+            Recipient::MlKem768X25519(recipient) => recipient.wrap_file_key(file_key).into(),
         }
     }
 }

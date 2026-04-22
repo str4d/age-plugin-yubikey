@@ -9,7 +9,7 @@ keywords = ["age", "cli", "encryption", "yubikey"]
 categories = ["command-line-utilities", "cryptography"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
-rust-version = "1.70" # MSRV
+rust-version = "1.74" # MSRV
 
 [package.metadata.deb]
 extended-description = """\
@@ -44,8 +44,11 @@ x509-cert = "0.3.0-rc.2"
 const-oid = "0.10.1"
 yubikey = { version = "=0.9.0-pre.0", features = ["untested"] }
 curve25519-dalek = "5.0.0-pre.0"
-x25519-dalek = "3.0.0-pre.0"
+x25519-dalek = { version = "3.0.0-pre.6", features = ["static_secrets", "getrandom"] }
 spki = { version = "0.8.0-rc.4", features = ["alloc"] }
+ml-kem = "0.3.0-rc.2"
+sha3 = "0.11.0"
+typenum = { version = "1.20.0", features = ["i128"] }
 
 # Translations
 i18n-embed = { version = "0.15", features = ["desktop-requester", "fluent-system"] }

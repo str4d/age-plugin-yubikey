@@ -12,7 +12,7 @@ use i18n_embed::{
 };
 use lazy_static::lazy_static;
 use rust_embed::RustEmbed;
-use yubikey::piv::{AlgorithmId, SlotId};
+use yubikey::piv::SlotId;
 use yubikey::Key;
 use yubikey::{piv::RetiredSlotId, reader::Context, PinPolicy, Serial, TouchPolicy};
 
@@ -29,6 +29,8 @@ mod recipient;
 use recipient::Recipient;
 
 use error::Error;
+
+use crate::plugin::SupportedTag;
 
 const PLUGIN_NAME: &str = "yubikey";
 const BINARY_NAME: &str = "age-plugin-yubikey";
@@ -96,10 +98,10 @@ struct PluginOptions {
     force: bool,
 
     #[options(
-        help = "Algorithm to generate the key with. Defaults to ECCP256.",
+        help = "Tag type of the key being generated. Defaults to p256tag.",
         no_short
     )]
-    algorithm: Option<String>,
+    tag: Option<String>,
 
     #[options(help = "Generate a new YubiKey identity.")]
     generate: bool,
@@ -145,7 +147,7 @@ struct PluginOptions {
 }
 
 struct PluginFlags {
-    algorithm: Option<AlgorithmId>,
+    tag: Option<SupportedTag>,
     serial: Option<Serial>,
     slot: Option<RetiredSlotId>,
     name: Option<String>,
@@ -158,10 +160,7 @@ impl TryFrom<PluginOptions> for PluginFlags {
     type Error = Error;
 
     fn try_from(opts: PluginOptions) -> Result<Self, Self::Error> {
-        let algorithm = opts
-            .algorithm
-            .map(util::algorithm_from_string)
-            .transpose()?;
+        let tag = opts.tag.map(util::tag_from_string).transpose()?;
         let serial = opts.serial.map(|s| s.into());
         let slot = opts.slot.map(util::ui_to_slot).transpose()?;
         let pin_policy = opts
@@ -174,7 +173,7 @@ impl TryFrom<PluginOptions> for PluginFlags {
             .transpose()?;
 
         Ok(PluginFlags {
-            algorithm,
+            tag,
             serial,
             slot,
             name: opts.name,
@@ -188,7 +187,7 @@ impl TryFrom<PluginOptions> for PluginFlags {
 fn generate(flags: PluginFlags) -> Result<(), Error> {
     let mut yubikey = key::open(flags.serial)?;
 
-    let (stub, recipient, metadata) = builder::IdentityBuilder::new(flags.algorithm, flags.slot)
+    let (stub, recipient, metadata) = builder::IdentityBuilder::new(flags.tag, flags.slot)
         .with_name(flags.name)
         .with_pin_policy(flags.pin_policy)
         .with_touch_policy(flags.touch_policy)
@@ -377,20 +376,29 @@ fn main() -> Result<(), Error> {
         );
         eprintln!();
 
-        let algorithm = match Select::new()
-            .with_prompt(fl!("cli-setup-algorithm"))
-            .items(&[fl!("algorithm-eccp256"), fl!("algorithm-x25519")])
+        let tag = match Select::new()
+            .with_prompt(fl!("cli-setup-tag"))
+            .items(&[
+                fl!("tag-p256"),
+                fl!("tag-x25519"),
+                fl!("tag-mlkem768x25519"),
+            ])
             .default(
-                [AlgorithmId::EccP256, AlgorithmId::X25519]
-                    .iter()
-                    .position(|p| p == &flags.algorithm.unwrap_or(builder::DEFAULT_ALGORITHM))
-                    .unwrap(),
+                [
+                    SupportedTag::P256Tag,
+                    SupportedTag::X25519Tag,
+                    SupportedTag::MlKem768X25519Tag,
+                ]
+                .iter()
+                .position(|p| p == &flags.tag.unwrap_or(builder::DEFAULT_TAG))
+                .unwrap(),
             )
             .report(true)
             .interact_opt()?
         {
-            Some(0) => AlgorithmId::EccP256,
-            Some(1) => AlgorithmId::X25519,
+            Some(0) => SupportedTag::P256Tag,
+            Some(1) => SupportedTag::X25519Tag,
+            Some(2) => SupportedTag::MlKem768X25519Tag,
             Some(_) => unreachable!(),
             None => return Ok(()),
         };
@@ -431,7 +439,7 @@ fn main() -> Result<(), Error> {
         let keys = key::list_slots(&mut yubikey)?
             .map(|(k, s, r)| match r {
                 Some(r) => {
-                    if r.algorithm() == algorithm {
+                    if r.identity_tag() == tag {
                         (k, s, Some(r))
                     } else {
                         (k, s, None)
@@ -524,8 +532,8 @@ fn main() -> Result<(), Error> {
                     return Ok(());
                 }
             } else {
-                let name = match algorithm {
-                    AlgorithmId::X25519 => {
+                let name = match tag {
+                    SupportedTag::X25519Tag | SupportedTag::MlKem768X25519Tag => {
                         // Skip TAG_HEX prompt if we don't have a signing key and need to fallback
                         // to a YubiKey attestation certificate.
                         let all_keys = Key::list(&mut yubikey)?;
@@ -542,7 +550,7 @@ fn main() -> Result<(), Error> {
                             None => String::from(""),
                         }
                     }
-                    _ => Input::<String>::new()
+                    SupportedTag::P256Tag => Input::<String>::new()
                         .with_prompt(format!(
                             "{} [{}]",
                             fl!("cli-setup-name-identity"),
@@ -634,7 +642,7 @@ fn main() -> Result<(), Error> {
                 {
                     eprintln!();
                     (
-                        builder::IdentityBuilder::new(Some(algorithm), Some(slot))
+                        builder::IdentityBuilder::new(Some(tag), Some(slot))
                             .with_name(match name {
                                 s if s.is_empty() => flags.name,
                                 s => Some(s),

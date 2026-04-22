@@ -27,9 +27,10 @@
 
 ## YubiKey metadata
 
-algorithm-eccp256 = ECCP256
-algorithm-x25519 = X25519
-unknown-algorithm = Unknown
+tag-p256 = p256
+tag-x25519 = x25519
+tag-mlkem768x25519 = mlkem768x25519
+unknown-tag = Unknown
 
 pin-policy-always = Always (A PIN is required for every decryption, if set)
 pin-policy-once   = Once   (A PIN is required once per session, if set)
@@ -71,7 +72,7 @@ cli-setup-intro =
     When asked below to select an option, use the up/down arrow keys to
     make your choice, or press [Esc] or [q] to quit.
 
-cli-setup-algorithm           = 💾 Select an algorithm
+cli-setup-tag                 = 🏷️ Select an identity tag type
 cli-setup-insert-yk           = ⏳ Please insert the {-yubikey} you want to set up.
 cli-setup-yk-name             = {$yubikey_name} (Serial: {$yubikey_serial})
 cli-setup-select-yk           = 🔑 Select a {-yubikey}

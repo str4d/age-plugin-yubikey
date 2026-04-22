@@ -1,7 +1,10 @@
 use std::fmt;
 use std::iter;
 
-use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
+use base64::{
+    prelude::{BASE64_STANDARD, BASE64_STANDARD_NO_PAD},
+    Engine,
+};
 use const_oid::{AssociatedOid, ObjectIdentifier};
 use x509_cert::{
     der::{
@@ -13,17 +16,20 @@ use x509_cert::{
     ext::{Criticality, ToExtension},
 };
 use yubikey::{
-    piv::{AlgorithmId, RetiredSlotId, SlotId},
+    piv::{RetiredSlotId, SlotId},
     Certificate, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
 use crate::fl;
 use crate::native::p256tag;
 use crate::native::x25519tag;
+use crate::plugin::SupportedTag;
 use crate::{error::Error, key::Stub, Recipient, BINARY_NAME, USABLE_SLOTS};
 
 pub(crate) const POLICY_EXTENSION_OID: ObjectIdentifier =
     ObjectIdentifier::new_unwrap("1.3.6.1.4.1.41482.3.8");
+pub const ML_KEM_768_EXTENSION_OID: ObjectIdentifier =
+    ObjectIdentifier::new_unwrap("1.3.6.1.4.1.55738.666.5");
 const YUBIKEY_ATTESTATION: &str = "YubiKey PIV Attestation";
 
 pub(crate) const OID_RSA: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.1");
@@ -102,10 +108,96 @@ impl Criticality for UsagePolicies {
     }
 }
 
-pub(crate) fn algorithm_from_string(s: String) -> Result<AlgorithmId, Error> {
+pub struct MlKem768Extension([u8; 32]);
+
+impl MlKem768Extension {
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+
+    pub(crate) fn from_bytes(encoded: &[u8]) -> Self {
+        let bytes: [u8; 32] = encoded.try_into().expect("secret length");
+        Self(bytes)
+    }
+}
+
+impl AssociatedOid for MlKem768Extension {
+    const OID: ObjectIdentifier = ML_KEM_768_EXTENSION_OID;
+}
+
+impl der::Encode for MlKem768Extension {
+    fn encoded_len(&self) -> der::Result<der::Length> {
+        let length: u32 = base64::encoded_len(32, true)
+            .unwrap()
+            .try_into()
+            .expect("encoded length");
+        Ok(der::Length::new(length))
+    }
+
+    fn encode(&self, encoder: &mut impl der::Writer) -> der::Result<()> {
+        let size: usize = base64::encoded_len(32, true).unwrap();
+        let mut encoded_bytes: Vec<u8> = Vec::new();
+        encoded_bytes.resize(size, 0);
+        BASE64_STANDARD
+            .encode_slice(self.0, &mut encoded_bytes)
+            .expect("encoded seed");
+        encoder.write(&encoded_bytes)
+    }
+}
+
+impl<'a> der::Decode<'a> for MlKem768Extension {
+    type Error = der::Error;
+
+    fn decode<R: der::Reader<'a>>(decoder: &mut R) -> der::Result<Self> {
+        let size: usize = base64::encoded_len(32, true).unwrap();
+        let mut encoded_bytes: Vec<u8> = Vec::new();
+        encoded_bytes.resize(size, 0);
+        decoder.read_into(&mut encoded_bytes).expect("base64 read");
+
+        let decoded_size = base64::decoded_len_estimate(size);
+        let mut decoded_bytes: Vec<u8> = Vec::new();
+        decoded_bytes.resize(decoded_size, 0);
+        BASE64_STANDARD
+            .decode_slice(encoded_bytes, &mut decoded_bytes)
+            .map_err(|_| der::ErrorKind::Failed)?;
+        let mut seed: [u8; 32] = [0; 32];
+        seed.copy_from_slice(&decoded_bytes[..32]);
+        Ok(Self(seed))
+    }
+}
+
+impl ToExtension for MlKem768Extension {
+    type Error = der::Error;
+    fn to_extension(
+        self,
+        _subject: &x509_cert::name::Name,
+        _extensions: &[x509_cert::ext::Extension],
+    ) -> Result<x509_cert::ext::Extension, Self::Error> {
+        // TODO: https://github.com/RustCrypto/formats/issues/1490
+        let extn_value: &[u8; 23] = b"1.3.6.1.4.1.55738.666.5";
+        Ok(x509_cert::ext::Extension {
+            extn_id: ML_KEM_768_EXTENSION_OID,
+            critical: false,
+            extn_value: OctetString::new(*extn_value)?,
+        })
+    }
+}
+
+impl Criticality for MlKem768Extension {
+    fn criticality(
+        &self,
+        _subject: &x509_cert::name::Name,
+        _extensions: &[x509_cert::ext::Extension],
+    ) -> bool {
+        false
+    }
+}
+
+pub(crate) fn tag_from_string(s: String) -> Result<SupportedTag, Error> {
     match s.as_str() {
-        "ECCP256" => Ok(AlgorithmId::EccP256),
-        "X25519" => Ok(AlgorithmId::X25519),
+        "p256" => Ok(SupportedTag::P256Tag),
+        "x25519" => Ok(SupportedTag::X25519Tag),
+        "mlkem768x25519" => Ok(SupportedTag::MlKem768X25519Tag),
         _ => Err(Error::YubiKey(yubikey::Error::AlgorithmError)),
     }
 }
@@ -231,7 +323,7 @@ pub(crate) struct Metadata {
     name: String,
     version: Option<String>,
     created: String,
-    algorithm: ObjectIdentifier,
+    pub(crate) algorithm: ObjectIdentifier,
     pub(crate) pin_policy: Option<PinPolicy>,
     pub(crate) touch_policy: Option<TouchPolicy>,
 }

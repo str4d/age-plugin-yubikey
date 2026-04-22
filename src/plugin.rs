@@ -6,12 +6,30 @@ use age_plugin::{
 };
 use std::collections::{HashMap, HashSet};
 use std::io;
+use yubikey::piv::AlgorithmId;
 
 use crate::{
     fl, key,
-    native::{p256tag, x25519tag},
+    native::{mlkem768x25519tag, p256tag, x25519tag},
     piv_p256, piv_x25519, Recipient, PLUGIN_NAME,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SupportedTag {
+    P256Tag,
+    X25519Tag,
+    MlKem768X25519Tag,
+}
+
+impl SupportedTag {
+    pub(crate) fn algorithm(&self) -> AlgorithmId {
+        match self {
+            Self::P256Tag => AlgorithmId::EccP256,
+            Self::X25519Tag => AlgorithmId::X25519,
+            Self::MlKem768X25519Tag => AlgorithmId::X25519,
+        }
+    }
+}
 
 pub(crate) struct Handler;
 
@@ -280,6 +298,7 @@ enum SupportedStanza {
     P256Tag(p256tag::RecipientLine),
     PivX25519(piv_x25519::RecipientLine),
     X25519Tag(x25519tag::RecipientLine),
+    MlKem768X25519Tag(mlkem768x25519tag::RecipientLine),
 }
 
 impl SupportedStanza {
@@ -297,6 +316,10 @@ impl SupportedStanza {
             x25519tag::X25519TAG_RECIPIENT_TAG => {
                 x25519tag::RecipientLine::from_stanza(stanza).map(|res| res.map(Self::X25519Tag))
             }
+            mlkem768x25519tag::MLKEM768X25519TAG_RECIPIENT_TAG => {
+                mlkem768x25519tag::RecipientLine::from_stanza(stanza)
+                    .map(|res| res.map(Self::MlKem768X25519Tag))
+            }
             _ => None,
         }
     }
@@ -307,6 +330,7 @@ impl SupportedStanza {
             SupportedStanza::P256Tag(line) => line.matches_stub(stub),
             SupportedStanza::PivX25519(line) => stub.tag == line.tag,
             SupportedStanza::X25519Tag(line) => line.matches_stub(stub),
+            SupportedStanza::MlKem768X25519Tag(line) => line.matches_stub(stub),
         }
     }
 
@@ -316,6 +340,7 @@ impl SupportedStanza {
             SupportedStanza::P256Tag(line) => line.unwrap_file_key(conn),
             SupportedStanza::PivX25519(line) => line.unwrap_file_key(conn),
             SupportedStanza::X25519Tag(line) => line.unwrap_file_key(conn),
+            SupportedStanza::MlKem768X25519Tag(line) => line.unwrap_file_key(conn),
         }
     }
 }

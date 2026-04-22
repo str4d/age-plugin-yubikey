@@ -6,6 +6,7 @@ use age_plugin::{identity, Callbacks};
 use dialoguer::Password;
 use log::{debug, error, warn};
 use rand::rngs::SysRng;
+use spki::der::zeroize::Zeroizing;
 use std::convert::Infallible;
 use std::fmt;
 use std::io;
@@ -13,6 +14,7 @@ use std::iter;
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime};
 use x509_cert::spki::ObjectIdentifier;
+use yubikey::piv::AlgorithmId;
 use yubikey::{
     certificate::Certificate,
     piv::{decrypt_data, RetiredSlotId, SlotId},
@@ -20,7 +22,8 @@ use yubikey::{
     Key, MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
-use crate::native::x25519tag;
+use crate::native::{mlkem768x25519tag, x25519tag};
+use crate::util::{MlKem768Extension, ML_KEM_768_EXTENSION_OID};
 use crate::{
     error::Error,
     fl,
@@ -34,7 +37,7 @@ const FIFTEEN_SECONDS: Duration = Duration::from_secs(15);
 const TAG_BYTES: usize = 4;
 
 /// The set of OIDs that we understand and use when parsing YubiKey slot certificates.
-const KNOWN_OIDS: &[ObjectIdentifier] = &[POLICY_EXTENSION_OID];
+const KNOWN_OIDS: &[ObjectIdentifier] = &[POLICY_EXTENSION_OID, ML_KEM_768_EXTENSION_OID];
 
 pub(crate) fn is_connected(reader: Reader) -> bool {
     filter_connected(&reader)
@@ -416,7 +419,16 @@ pub(crate) fn identify_recipient(cert: &Certificate) -> Option<Recipient> {
     match cert.subject_pki().algorithm.oid {
         p256tag::OID_P256 => p256tag::Recipient::from_certificate(cert).map(Recipient::P256Tag),
         x25519tag::OID_X25519 => {
-            x25519tag::Recipient::from_certificate(cert).map(Recipient::X25519Tag)
+            match cert
+                .cert
+                .tbs_certificate()
+                .get_extension::<MlKem768Extension>()
+                .expect("decode extension")
+            {
+                Some(_) => mlkem768x25519tag::Recipient::from_certificate(cert)
+                    .map(Recipient::MlKem768X25519),
+                None => x25519tag::Recipient::from_certificate(cert).map(Recipient::X25519Tag),
+            }
         }
         _ => None,
     }
@@ -671,8 +683,35 @@ impl Connection {
         &self.pk
     }
 
+    pub(crate) fn cert(&self) -> &Certificate {
+        &self.cert
+    }
+
     pub(crate) fn stub(&self) -> Stub {
         Stub::new(self.yubikey.serial(), self.slot, &self.pk)
+    }
+
+    pub(crate) fn decrypt_data(&mut self, ct: &[u8]) -> Result<Zeroizing<Vec<u8>>, ()> {
+        let algorithm_oid = match &self.cached_metadata {
+            Some(metadata) => metadata.algorithm,
+            None => {
+                self.cert
+                    .cert
+                    .tbs_certificate()
+                    .subject_public_key_info()
+                    .algorithm
+                    .oid
+            }
+        };
+        let algorithm = match algorithm_oid {
+            p256tag::OID_P256 => AlgorithmId::EccP256,
+            x25519tag::OID_X25519 => AlgorithmId::X25519,
+            _ => panic!("YubiKey algorithm not supported"),
+        };
+        match decrypt_data(&mut self.yubikey, ct, algorithm, SlotId::Retired(self.slot)) {
+            Ok(res) => Ok(res),
+            Err(_) => return Err(()),
+        }
     }
 
     pub(crate) fn request_pin_if_necessary<E>(
@@ -735,7 +774,7 @@ impl Connection {
 
     pub(crate) fn ecdh(&mut self, epk_bytes: &[u8]) -> Result<yubikey::Buffer, ()> {
         // The YubiKey API for performing scalar multiplication
-        let algorithm = self.pk.algorithm();
+        let algorithm = self.pk.identity_tag().algorithm();
         match algorithm {
             yubikey::piv::AlgorithmId::X25519 => assert_eq!(epk_bytes.len(), 32),
             yubikey::piv::AlgorithmId::EccP256 => assert_eq!(epk_bytes.len(), 65),
