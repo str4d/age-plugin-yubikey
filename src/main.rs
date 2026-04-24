@@ -27,6 +27,8 @@ use recipient::Recipient;
 
 use error::Error;
 
+use crate::builder::IdentityType;
+
 const PLUGIN_NAME: &str = "yubikey";
 const BINARY_NAME: &str = "age-plugin-yubikey";
 const IDENTITY_PREFIX: bech32::Hrp = bech32::Hrp::parse_unchecked("AGE-PLUGIN-YUBIKEY-");
@@ -133,11 +135,20 @@ struct PluginOptions {
         no_short
     )]
     touch_policy: Option<String>,
+
+    #[options(
+        help = "Type of identity to generate. One of [tag, tagpq]. Defaults to 'tagpq'.",
+        short = "t",
+        long = "type",
+        meta = "TYPE"
+    )]
+    r#type: Option<String>,
 }
 
 struct PluginFlags {
     serial: Option<Serial>,
     slot: Option<RetiredSlotId>,
+    kind: Option<IdentityType>,
     name: Option<String>,
     pin_policy: Option<PinPolicy>,
     touch_policy: Option<TouchPolicy>,
@@ -150,6 +161,7 @@ impl TryFrom<PluginOptions> for PluginFlags {
     fn try_from(opts: PluginOptions) -> Result<Self, Self::Error> {
         let serial = opts.serial.map(|s| s.into());
         let slot = opts.slot.map(util::ui_to_slot).transpose()?;
+        let kind = opts.r#type.map(|s| s.parse()).transpose()?;
         let pin_policy = opts
             .pin_policy
             .map(util::pin_policy_from_string)
@@ -162,6 +174,7 @@ impl TryFrom<PluginOptions> for PluginFlags {
         Ok(PluginFlags {
             serial,
             slot,
+            kind,
             name: opts.name,
             pin_policy,
             touch_policy,
@@ -173,7 +186,7 @@ impl TryFrom<PluginOptions> for PluginFlags {
 fn generate(flags: PluginFlags) -> Result<(), Error> {
     let mut yubikey = key::open(flags.serial)?;
 
-    let (stub, recipient, metadata) = builder::IdentityBuilder::new(flags.slot)
+    let (stub, recipient, metadata) = builder::IdentityBuilder::new(flags.kind, flags.slot)
         .with_name(flags.name)
         .with_pin_policy(flags.pin_policy)
         .with_touch_policy(flags.touch_policy)
@@ -480,6 +493,26 @@ fn main() -> Result<(), Error> {
                     return Ok(());
                 }
             } else {
+                let types = [IdentityType::Tag, IdentityType::TagPq];
+
+                let identity_type = match Select::new()
+                    .with_prompt(fl!("cli-setup-select-identity-type"))
+                    .items(&types)
+                    .default(
+                        types
+                            .iter()
+                            .position(|p| {
+                                p == &flags.kind.unwrap_or(builder::DEFAULT_IDENTITY_TYPE)
+                            })
+                            .unwrap(),
+                    )
+                    .report(true)
+                    .interact_opt()?
+                {
+                    Some(i) => types[i],
+                    None => return Ok(()),
+                };
+
                 let name = Input::<String>::new()
                     .with_prompt(format!(
                         "{} [{}]",
@@ -572,7 +605,7 @@ fn main() -> Result<(), Error> {
                 {
                     eprintln!();
                     (
-                        builder::IdentityBuilder::new(Some(slot))
+                        builder::IdentityBuilder::new(Some(identity_type), Some(slot))
                             .with_name(match name {
                                 s if s.is_empty() => flags.name,
                                 s => Some(s),

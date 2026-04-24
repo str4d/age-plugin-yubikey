@@ -9,13 +9,19 @@ to 0.3.0 are beta releases.
 ## [Unreleased]
 
 ### Added
-- Support for the native non-hybrid tagged recipient type (`age1tag1..`).
-  - Encryption requires making the `age-plugin-yubikey` binary available on the
-    `PATH` as `age-plugin-tag`, or upgrading to a client version that builds in
-    support for this new native recipient type.
+- Support for the native tagged recipient types:
+  - Hybrid (`age1tagpq1..`)
+  - Non-hybrid (`age1tag1..`)
+
+  Encryption requires making the `age-plugin-yubikey` binary available on the
+  `PATH` as `age-plugin-tagpq` or `age-plugin-tag` (as needed), or upgrading to
+  a client version that builds in support for the new native recipient type.
+- `-t/--type` flag, to generate a specific identity type.
 
 ### Changed
-- MSRV is now 1.70.0.
+- MSRV is now 1.74.0.
+- The default generated identity type is now the native hybrid tagged recipient
+  type (`age1tagpq1..`).
 - Encryption to an identity now uses the preferred recipient type supported for
   that identity.
 - `age-plugin-yubikey` now prints `age1tag1..` recipients in its CLI and

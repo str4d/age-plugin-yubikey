@@ -1,8 +1,11 @@
+use std::str::FromStr;
+
+use age_core::secrecy::zeroize::Zeroize;
 use dialoguer::Password;
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::OsRng, Rng, RngCore};
 use x509::RelativeDistinguishedName;
 use yubikey::{
-    certificate::Certificate,
+    certificate::{Certificate, PublicKeyInfo},
     piv::{generate as yubikey_generate, AlgorithmId, RetiredSlotId, SlotId},
     Key, PinPolicy, TouchPolicy, YubiKey,
 };
@@ -11,15 +14,17 @@ use crate::{
     error::Error,
     fl,
     key::{self, Stub},
-    native::p256tag,
+    native::{mlkem768p256tag, p256tag},
     util::{Metadata, POLICY_EXTENSION_OID},
     Recipient, BINARY_NAME, USABLE_SLOTS,
 };
 
+pub(crate) const DEFAULT_IDENTITY_TYPE: IdentityType = IdentityType::TagPq;
 pub(crate) const DEFAULT_PIN_POLICY: PinPolicy = PinPolicy::Once;
 pub(crate) const DEFAULT_TOUCH_POLICY: TouchPolicy = TouchPolicy::Always;
 
 pub(crate) struct IdentityBuilder {
+    identity_type: Option<IdentityType>,
     slot: Option<RetiredSlotId>,
     force: bool,
     name: Option<String>,
@@ -28,8 +33,9 @@ pub(crate) struct IdentityBuilder {
 }
 
 impl IdentityBuilder {
-    pub(crate) fn new(slot: Option<RetiredSlotId>) -> Self {
+    pub(crate) fn new(identity_type: Option<IdentityType>, slot: Option<RetiredSlotId>) -> Self {
         IdentityBuilder {
+            identity_type,
             slot,
             name: None,
             pin_policy: None,
@@ -59,6 +65,8 @@ impl IdentityBuilder {
     }
 
     pub(crate) fn build(self, yubikey: &mut YubiKey) -> Result<(Stub, Recipient, Metadata), Error> {
+        let identity_type = self.identity_type.unwrap_or(DEFAULT_IDENTITY_TYPE);
+
         let slot = match self.slot {
             Some(slot) => {
                 if !self.force {
@@ -99,14 +107,12 @@ impl IdentityBuilder {
         let generated = yubikey_generate(
             yubikey,
             SlotId::Retired(slot),
-            AlgorithmId::EccP256,
+            identity_type.algorithm(),
             pin_policy,
             touch_policy,
         )?;
 
-        let recipient = Recipient::P256Tag(
-            p256tag::Recipient::from_spki(&generated).expect("YubiKey generates a valid pubkey"),
-        );
+        let (pending_identity, recipient) = identity_type.recipient(&generated)?;
         let stub = Stub::new(yubikey.serial(), slot, &recipient);
 
         eprintln!();
@@ -137,29 +143,120 @@ impl IdentityBuilder {
             eprintln!("{}", fl!("builder-touch-yk"));
         }
 
-        let cert = Certificate::generate_self_signed(
-            yubikey,
-            SlotId::Retired(slot),
-            serial,
-            None,
-            &[
-                RelativeDistinguishedName::organization(BINARY_NAME),
-                RelativeDistinguishedName::organizational_unit(env!("CARGO_PKG_VERSION")),
-                RelativeDistinguishedName::common_name(&name),
-            ],
-            generated,
-            &[x509::Extension::regular(
+        let cert = pending_identity.generate_certificate(
+            x509::Extension::regular(
                 POLICY_EXTENSION_OID,
                 &[pin_policy.into(), touch_policy.into()],
-            )],
+            ),
+            |extensions| {
+                let cert = Certificate::generate_self_signed(
+                    yubikey,
+                    SlotId::Retired(slot),
+                    serial,
+                    None,
+                    &[
+                        RelativeDistinguishedName::organization(BINARY_NAME),
+                        RelativeDistinguishedName::organizational_unit(env!("CARGO_PKG_VERSION")),
+                        RelativeDistinguishedName::common_name(&name),
+                    ],
+                    generated,
+                    extensions,
+                )?;
+
+                Ok(cert)
+            },
         )?;
 
         let metadata = Metadata::extract(yubikey, slot, &cert, false).unwrap();
 
-        Ok((
-            Stub::new(yubikey.serial(), slot, &recipient),
-            recipient,
-            metadata,
-        ))
+        Ok((stub, recipient, metadata))
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IdentityType {
+    Tag,
+    TagPq,
+}
+
+impl FromStr for IdentityType {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "tag" => Ok(Self::Tag),
+            "tagpq" => Ok(Self::TagPq),
+            _ => Err(Error::InvalidIdentityType(s.into())),
+        }
+    }
+}
+
+impl ToString for IdentityType {
+    fn to_string(&self) -> String {
+        match self {
+            IdentityType::Tag => "tag".into(),
+            IdentityType::TagPq => "tagpq".into(),
+        }
+    }
+}
+
+impl IdentityType {
+    fn algorithm(self) -> AlgorithmId {
+        match self {
+            Self::Tag | Self::TagPq { .. } => AlgorithmId::EccP256,
+        }
+    }
+
+    fn recipient(self, spki: &PublicKeyInfo) -> Result<(PendingIdentity, Recipient), Error> {
+        match self {
+            Self::Tag => Ok((
+                PendingIdentity::Tag,
+                Recipient::P256Tag(
+                    p256tag::Recipient::from_spki(spki).expect("YubiKey generates a valid pubkey"),
+                ),
+            )),
+
+            Self::TagPq => {
+                // Generate the PQ half of the identity.
+                let mut dk_seed = [0; 64];
+                OsRng.fill(&mut dk_seed);
+                let (_, ek_pq) = mlkem768p256tag::expand_pq_key(&dk_seed);
+
+                Ok((
+                    PendingIdentity::TagPq { dk_seed },
+                    Recipient::MlKem768P256Tag(Box::new(
+                        mlkem768p256tag::Recipient::from_spki(spki, ek_pq)
+                            .expect("YubiKey generates a valid pubkey"),
+                    )),
+                ))
+            }
+        }
+    }
+}
+
+enum PendingIdentity {
+    Tag,
+    TagPq { dk_seed: [u8; 64] },
+}
+
+impl PendingIdentity {
+    fn generate_certificate(
+        self,
+        policy_extension: x509::Extension<'_, &'static [u64]>,
+        f: impl FnOnce(&[x509::Extension<'_, &'static [u64]>]) -> Result<Certificate, Error>,
+    ) -> Result<Certificate, Error> {
+        match self {
+            Self::Tag => f(&[policy_extension]),
+
+            Self::TagPq { mut dk_seed } => {
+                let cert = mlkem768p256tag::encode_ml_kem_768_seed(&dk_seed, |pq_ext| {
+                    f(&[pq_ext, policy_extension])
+                })?;
+
+                dk_seed.zeroize();
+
+                Ok(cert)
+            }
+        }
     }
 }

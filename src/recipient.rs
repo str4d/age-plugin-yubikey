@@ -3,7 +3,12 @@ use std::fmt;
 use age_core::format::{FileKey, Stanza};
 use sha2::{Digest, Sha256};
 
-use crate::{native::p256tag, piv_p256, util::Metadata, PLUGIN_NAME};
+use crate::{
+    native::{mlkem768p256tag, p256tag},
+    piv_p256,
+    util::Metadata,
+    PLUGIN_NAME,
+};
 
 pub(crate) const TAG_BYTES: usize = 4;
 
@@ -11,6 +16,7 @@ pub(crate) const TAG_BYTES: usize = 4;
 pub(crate) enum Recipient {
     PivP256(piv_p256::Recipient),
     P256Tag(p256tag::Recipient),
+    MlKem768P256Tag(Box<mlkem768p256tag::Recipient>),
 }
 
 impl fmt::Display for Recipient {
@@ -18,6 +24,7 @@ impl fmt::Display for Recipient {
         match self {
             Recipient::PivP256(recipient) => recipient.fmt(f),
             Recipient::P256Tag(recipient) => recipient.fmt(f),
+            Recipient::MlKem768P256Tag(recipient) => recipient.fmt(f),
         }
     }
 }
@@ -28,6 +35,9 @@ impl Recipient {
         match plugin_name {
             PLUGIN_NAME => piv_p256::Recipient::from_bytes(bytes).map(Self::PivP256),
             p256tag::PLUGIN_NAME => p256tag::Recipient::from_bytes(bytes).map(Self::P256Tag),
+            mlkem768p256tag::PLUGIN_NAME => mlkem768p256tag::Recipient::from_bytes(bytes)
+                .map(Box::new)
+                .map(Self::MlKem768P256Tag),
             _ => None,
         }
     }
@@ -52,6 +62,7 @@ impl Recipient {
         match self {
             Recipient::PivP256(recipient) => recipient.tag(),
             Recipient::P256Tag(recipient) => recipient.static_tag(),
+            Recipient::MlKem768P256Tag(recipient) => recipient.static_tag(),
         }
     }
 
@@ -59,6 +70,7 @@ impl Recipient {
         match self {
             Recipient::PivP256(recipient) => recipient.wrap_file_key(file_key).into(),
             Recipient::P256Tag(recipient) => recipient.wrap_file_key(file_key).into(),
+            Recipient::MlKem768P256Tag(recipient) => recipient.wrap_file_key(file_key).into(),
         }
     }
 }

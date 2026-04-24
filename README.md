@@ -8,7 +8,7 @@ which enables files to be encrypted to age identities stored on YubiKeys.
 
 | Environment | CLI command |
 |-------------|-------------|
-| Cargo (Rust 1.70+) | `cargo install age-plugin-yubikey` |
+| Cargo (Rust 1.74+) | `cargo install age-plugin-yubikey` |
 | Homebrew (macOS or Linux) | `brew install age-plugin-yubikey` |
 | Arch Linux | `pacman -S age-plugin-yubikey` |
 | Debian | [Debian package](https://github.com/str4d/age-plugin-yubikey/releases) |
@@ -80,6 +80,7 @@ print it to standard output:
 $ age-plugin-yubikey --generate \
     [--serial SERIAL] \
     [--slot SLOT] \
+    [--type TYPE] \
     [--name NAME] \
     [--pin-policy PIN-POLICY] \
     [--touch-policy TOUCH-POLICY]
@@ -110,8 +111,9 @@ $ age-plugin-yubikey --list
 
 To encrypt files to these YubiKey recipients, ensure you have a recent version
 of an age client, and then use the recipients with it as normal (e.g.
-`rage -r age1tag1...`). If this does not work, make `age-plugin-yubikey`
-accessible in your `PATH` with the name `age-plugin-tag` and try again.
+`rage -r age1tagpq1...`). If this does not work, make `age-plugin-yubikey`
+accessible in your `PATH` with the name `age-plugin-tagpq` (or the appropriate
+suffix for the recipient type) and try again.
 
 The output of the `--list` command can also be used directly to encrypt files to
 all recipients (e.g. `age -R filename.txt`).
