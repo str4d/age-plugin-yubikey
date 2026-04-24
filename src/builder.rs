@@ -2,7 +2,11 @@ use std::time::SystemTime;
 
 use dialoguer::Password;
 use hpke::Kem;
-use spki::{der::referenced::OwnedToRef, SubjectPublicKeyInfoOwned, SubjectPublicKeyInfoRef};
+use p384::pkcs8::AssociatedOid;
+use spki::{
+    der::referenced::OwnedToRef, ObjectIdentifier, SubjectPublicKeyInfoOwned,
+    SubjectPublicKeyInfoRef,
+};
 use x509_cert::{
     builder::{profile::BuilderProfile, Builder, CertificateBuilder},
     certificate::Rfc5280,
@@ -29,6 +33,8 @@ use crate::{
 pub(crate) const DEFAULT_TAG: SupportedTag = SupportedTag::P256Tag;
 pub(crate) const DEFAULT_PIN_POLICY: PinPolicy = PinPolicy::Once;
 pub(crate) const DEFAULT_TOUCH_POLICY: TouchPolicy = TouchPolicy::Always;
+
+const OID_ED25519: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.3.101.112");
 
 struct SelfSigned {
     subject: Name,
@@ -214,8 +220,6 @@ impl IdentityBuilder {
                                 ),
                             })
                             .unwrap();
-                        // Match yubikey signer to signing key algorithm. Only supports RSA or P256
-                        // without adding another external library.
                         let cert = match key.certificate().subject_pki().algorithm.oid {
                             OID_RSA => {
                                 // Need to determine RSA key type. Uses less than comparison
@@ -266,6 +270,23 @@ impl IdentityBuilder {
                             }
                             p256tag::OID_P256 => {
                                 let signer = yubikey_signer::Signer::<'_, p256::NistP256>::new(
+                                    yubikey,
+                                    key.slot(),
+                                    key.certificate().subject_pki(),
+                                )?;
+                                builder.build(&signer).expect("signature")
+                            }
+                            OID_ED25519 => {
+                                let signer =
+                                    yubikey_signer::Signer::<'_, ed25519_dalek::SigningKey>::new(
+                                        yubikey,
+                                        key.slot(),
+                                        key.certificate().subject_pki(),
+                                    )?;
+                                builder.build(&signer).expect("signature")
+                            }
+                            p384::NistP384::OID => {
+                                let signer = yubikey_signer::Signer::<'_, p384::NistP384>::new(
                                     yubikey,
                                     key.slot(),
                                     key.certificate().subject_pki(),
