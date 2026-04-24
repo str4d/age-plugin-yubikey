@@ -27,6 +27,10 @@
 
 ## YubiKey metadata
 
+algorithm-eccp256 = ECCP256
+algorithm-x25519 = X25519
+unknown-algorithm = Unknown
+
 pin-policy-always = Always (A PIN is required for every decryption, if set)
 pin-policy-once   = Once   (A PIN is required once per session, if set)
 pin-policy-never  = Never  (A PIN is NOT required to decrypt)
@@ -67,6 +71,7 @@ cli-setup-intro =
     When asked below to select an option, use the up/down arrow keys to
     make your choice, or press [Esc] or [q] to quit.
 
+cli-setup-algorithm           = 💾 Select an algorithm
 cli-setup-insert-yk           = ⏳ Please insert the {-yubikey} you want to set up.
 cli-setup-yk-name             = {$yubikey_name} (Serial: {$yubikey_serial})
 cli-setup-select-yk           = 🔑 Select a {-yubikey}
@@ -188,6 +193,8 @@ plugin-err-pin-too-long     = PIN was too long.
 plugin-err-pin-required     = A PIN is required for {-yubikey} with serial {$yubikey_serial}
 
 ## Errors
+
+err-build = Failed to build identity: {$err}
 
 err-mgmt-key-auth = Failed to authenticate with the PIN-protected management key.
 rec-mgmt-key-auth =

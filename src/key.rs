@@ -5,6 +5,7 @@ use age_core::secrecy::{ExposeSecret, SecretString};
 use age_plugin::{identity, Callbacks};
 use dialoguer::Password;
 use log::{debug, error, warn};
+use rand::rngs::SysRng;
 use std::convert::Infallible;
 use std::env;
 use std::fmt;
@@ -14,28 +15,29 @@ use std::iter;
 use std::os::unix::net::UnixStream;
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime};
-use x509_parser::der_parser::oid::Oid;
+use x509_cert::spki::ObjectIdentifier;
 use yubikey::{
     certificate::Certificate,
-    piv::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
+    piv::{decrypt_data, RetiredSlotId, SlotId},
     reader::{Context, Reader},
     Key, MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
+use crate::native::x25519tag;
 use crate::{
     error::Error,
     fl,
     native::p256tag,
-    recipient::TAG_BYTES,
     util::{otp_serial_prefix, Metadata, POLICY_EXTENSION_OID},
     Recipient, IDENTITY_PREFIX,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
 const FIFTEEN_SECONDS: Duration = Duration::from_secs(15);
+const TAG_BYTES: usize = 4;
 
 /// The set of OIDs that we understand and use when parsing YubiKey slot certificates.
-const KNOWN_OIDS: &[&[u64]] = &[POLICY_EXTENSION_OID];
+const KNOWN_OIDS: &[ObjectIdentifier] = &[POLICY_EXTENSION_OID];
 
 pub(crate) fn is_connected(reader: Reader) -> bool {
     filter_connected(&reader)
@@ -424,7 +426,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
     }
 
     match MgmKey::get_protected(yubikey) {
-        Ok(mgm_key) => yubikey.authenticate(mgm_key).map_err(|e| match e {
+        Ok(mgm_key) => yubikey.authenticate(&mgm_key).map_err(|e| match e {
             yubikey::Error::AuthenticationError => Error::ManagementKeyAuth,
             _ => e.into(),
         })?,
@@ -432,11 +434,11 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
         _ => {
             // Try to authenticate with the default management key.
             yubikey
-                .authenticate(MgmKey::default())
+                .authenticate(&MgmKey::get_default(&yubikey).unwrap())
                 .map_err(|_| Error::CustomManagementKey)?;
 
             // Migrate to a PIN-protected management key.
-            let mgm_key = MgmKey::generate();
+            let mgm_key = MgmKey::generate_for(&yubikey, &mut SysRng).unwrap();
             eprintln!();
             eprintln!("{}", fl!("mgr-changing-mgmt-key"));
             eprint!("... ");
@@ -459,26 +461,34 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
 
 /// Parses the certificate to identify the preferred recipient type it corresponds to.
 pub(crate) fn identify_recipient(cert: &Certificate) -> Option<Recipient> {
-    let known_oids = KNOWN_OIDS
-        .iter()
-        .map(|oid| Oid::from(oid).unwrap())
-        .collect::<Vec<_>>();
+    let known_oids = KNOWN_OIDS.iter().collect::<Vec<_>>();
 
     // If the certificate contains any unrecognised critical extensions, reject it: we
     // don't know how to correctly use the identity. In particular, some identities store
     // parts of their private key material in certificate extensions to work around
     // hardware limitations. Not understanding these extensions could lead to encrypting
     // with the wrong protocol and violating security assumptions.
-    let (_, c) = x509_parser::parse_x509_certificate(cert.as_ref()).ok()?;
-    if c.tbs_certificate
-        .extensions()
-        .iter()
-        .any(|ext| ext.critical && !known_oids.contains(&ext.oid))
-    {
+    if match cert.cert.tbs_certificate().extensions() {
+        Some(exts) => {
+            exts.to_owned()
+                .extract_if(.., |ext| {
+                    ext.critical && !known_oids.contains(&&ext.extn_id)
+                })
+                .count()
+                > (0 as usize)
+        }
+        None => true,
+    } {
         return None;
     }
 
-    p256tag::Recipient::from_certificate(cert).map(Recipient::P256Tag)
+    match cert.subject_pki().algorithm.oid {
+        p256tag::OID_P256 => p256tag::Recipient::from_certificate(cert).map(Recipient::P256Tag),
+        x25519tag::OID_X25519 => {
+            x25519tag::Recipient::from_certificate(cert).map(Recipient::X25519Tag)
+        }
+        _ => None,
+    }
 }
 
 /// Returns an iterator of keys that are occupying plugin-compatible slots, along with the
@@ -792,10 +802,14 @@ impl Connection {
         Ok(Ok(()))
     }
 
-    pub(crate) fn p256_ecdh(&mut self, epk_bytes: &[u8]) -> Result<yubikey::Buffer, ()> {
-        // The YubiKey API for performing scalar multiplication takes the point in its
-        // uncompressed SEC-1 encoding.
-        assert_eq!(epk_bytes.len(), 65);
+    pub(crate) fn ecdh(&mut self, epk_bytes: &[u8]) -> Result<yubikey::Buffer, ()> {
+        // The YubiKey API for performing scalar multiplication
+        let algorithm = self.pk.algorithm();
+        match algorithm {
+            yubikey::piv::AlgorithmId::X25519 => assert_eq!(epk_bytes.len(), 32),
+            yubikey::piv::AlgorithmId::EccP256 => assert_eq!(epk_bytes.len(), 65),
+            _ => panic!("Unsupported algorithm"),
+        }
 
         // Check if the touch policy requires a touch.
         let needs_touch = match (
@@ -810,7 +824,7 @@ impl Connection {
         let shared_secret = match decrypt_data(
             &mut self.yubikey,
             epk_bytes,
-            AlgorithmId::EccP256,
+            algorithm,
             SlotId::Retired(self.slot),
         ) {
             Ok(res) => res,

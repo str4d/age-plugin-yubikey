@@ -8,10 +8,6 @@ use age_core::{
 };
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use hpke::{Deserializable, Serializable};
-use p256::{
-    elliptic_curve::sec1::{FromSec1Point, ToSec1Point},
-    Sec1Point,
-};
 use x509_cert::spki::{ObjectIdentifier, SubjectPublicKeyInfoRef};
 use yubikey::Certificate;
 
@@ -22,12 +18,12 @@ use crate::{
     util::base64_arg,
 };
 
-pub const OID_P256: ObjectIdentifier = p256::elliptic_curve::ALGORITHM_OID;
+pub const OID_X25519: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.3.101.110");
 
 const RECIPIENT_PREFIX: bech32::Hrp = bech32::Hrp::parse_unchecked("age1tag");
 
-pub(crate) const P256TAG_RECIPIENT_TAG: &str = "p256tag";
-const P256TAG_SALT: &str = "age-encryption.org/p256tag";
+pub(crate) const X25519TAG_RECIPIENT_TAG: &str = "x25519tag";
+const X25519TAG_SALT: &str = "age-encryption.org/x25519tag";
 
 const TAG_BYTES: usize = 4;
 /// Per [RFC 9180 section 7.1.1]:
@@ -36,7 +32,7 @@ const TAG_BYTES: usize = 4;
 ///
 /// [RFC 9180 section 7.1.1]: https://www.rfc-editor.org/rfc/rfc9180.html#section-7.1.1
 /// [SECG]: https://secg.org/sec1-v2.pdf
-const ENC_BYTES: usize = 65;
+const ENC_BYTES: usize = 32;
 
 /// TODO: Remove these rewrites when age-core update rand lib
 fn hpke_seal<R: hpke::rand_core::CryptoRng + hpke::rand_core::Rng>(
@@ -72,7 +68,7 @@ pub fn hpke_open<Kem: hpke::Kem>(
     )
 }
 
-type Kem = hpke::kem::DhP256HkdfSha256;
+type Kem = hpke::kem::X25519HkdfSha256;
 
 /// The non-hybrid tagged age recipient type, designed for hardware keys where decryption
 /// potentially requires user presence.
@@ -82,15 +78,13 @@ type Kem = hpke::kem::DhP256HkdfSha256;
 /// untagged recipient types.
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Recipient {
-    /// Compressed encoding of the recipient public key.
-    compressed: Sec1Point,
-    /// Cached in-memory representation, for HPKE.
+    pk: x25519_dalek::PublicKey,
     pk_recip: <Kem as hpke::Kem>::PublicKey,
 }
 
 impl fmt::Display for Recipient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        bech32_encode_to_fmt(f, RECIPIENT_PREFIX, self.compressed.as_bytes())
+        bech32_encode_to_fmt(f, RECIPIENT_PREFIX, &self.pk.to_bytes())
     }
 }
 
@@ -101,23 +95,17 @@ impl fmt::Debug for Recipient {
 }
 
 impl Recipient {
-    /// Attempts to parse a valid p256tag recipient from its compressed SEC-1 byte encoding.
+    /// Attempts to parse a valid x25519tag recipient.
     pub(crate) fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        let encoded = p256::Sec1Point::from_bytes(bytes).ok()?;
-        if !encoded.is_compressed() {
-            return None;
-        }
+        let pk_bytes: [u8; 32] = bytes.try_into().expect("pubkey length");
+        let pk = x25519_dalek::PublicKey::from(pk_bytes);
+        let pk_recip = <Kem as hpke::Kem>::PublicKey::from_bytes(&pk_bytes).expect("valid");
 
-        let point = p256::PublicKey::from_sec1_point(&encoded).into_option()?;
+        Some(Self { pk, pk_recip })
+    }
 
-        let pk_recip =
-            <Kem as hpke::Kem>::PublicKey::from_bytes(point.to_sec1_point(false).as_bytes())
-                .expect("valid");
-
-        Some(Self {
-            compressed: encoded,
-            pk_recip,
-        })
+    pub(crate) fn to_bytes(&self) -> [u8; 32] {
+        self.pk.to_bytes()
     }
 
     pub(crate) fn from_certificate(cert: &Certificate) -> Option<Self> {
@@ -125,35 +113,23 @@ impl Recipient {
     }
 
     pub(crate) fn from_spki(spki: SubjectPublicKeyInfoRef<'_>) -> Option<Self> {
-        match p256::PublicKey::try_from(spki) {
-            Ok(pk) => {
-                let compressed = pk.to_sec1_point(true);
-                let pk_recip =
-                    <Kem as hpke::Kem>::PublicKey::from_bytes(pk.to_sec1_point(false).as_bytes())
-                        .ok()?;
-                Some(Self {
-                    compressed,
-                    pk_recip,
-                })
-            }
-            _ => None,
-        }
-    }
-
-    /// Returns the compressed SEC-1 encoding of this recipient.
-    pub(crate) fn to_compressed(&self) -> p256::Sec1Point {
-        self.compressed
+        let pk_bytes: [u8; 32] = spki
+            .subject_public_key
+            .raw_bytes()
+            .try_into()
+            .expect("spki length");
+        Self::from_bytes(&pk_bytes)
     }
 
     pub(crate) fn static_tag(&self) -> [u8; TAG_BYTES] {
-        static_tag(self.compressed.as_bytes())
+        static_tag(&self.pk.to_bytes())
     }
 
     pub(crate) fn wrap_file_key(&self, file_key: &FileKey) -> RecipientLine {
         let mut csprng = rand::rng();
         let (enc, ct) = hpke_seal(
             &self.pk_recip,
-            P256TAG_SALT.as_bytes(),
+            X25519TAG_SALT.as_bytes(),
             file_key.expose_secret(),
             &mut csprng,
         );
@@ -164,6 +140,10 @@ impl Recipient {
             ct,
         }
     }
+
+    pub(crate) fn public_key(&self) -> &x25519_dalek::PublicKey {
+        &self.pk
+    }
 }
 
 fn tag(enc: &<Kem as hpke::Kem>::EncappedKey, static_tag: [u8; TAG_BYTES]) -> [u8; TAG_BYTES] {
@@ -173,7 +153,7 @@ fn tag(enc: &<Kem as hpke::Kem>::EncappedKey, static_tag: [u8; TAG_BYTES]) -> [u
         .chain(static_tag)
         .collect::<Vec<u8>>();
 
-    stanza_tag(&ikm, P256TAG_SALT)
+    stanza_tag(&ikm, X25519TAG_SALT)
 }
 
 pub(crate) struct RecipientLine {
@@ -185,7 +165,7 @@ pub(crate) struct RecipientLine {
 impl From<RecipientLine> for Stanza {
     fn from(r: RecipientLine) -> Self {
         Stanza {
-            tag: P256TAG_RECIPIENT_TAG.to_owned(),
+            tag: X25519TAG_RECIPIENT_TAG.to_owned(),
             args: vec![
                 BASE64_STANDARD_NO_PAD.encode(r.tag),
                 BASE64_STANDARD_NO_PAD.encode(r.enc.to_bytes()),
@@ -197,7 +177,7 @@ impl From<RecipientLine> for Stanza {
 
 impl RecipientLine {
     pub(crate) fn from_stanza(s: Stanza) -> Option<Result<Self, ()>> {
-        if s.tag != P256TAG_RECIPIENT_TAG {
+        if s.tag != X25519TAG_RECIPIENT_TAG {
             return None;
         }
 
@@ -237,10 +217,10 @@ impl RecipientLine {
 
         // A failure to decrypt is fatal, because we assume that we won't
         // encounter 32-bit collisions on the key tag embedded in the header.
-        hpke_open::<YubiKeyDhP256HkdfSha256>(
+        hpke_open::<YubiKeyX25519HkdfSha256>(
             &self.enc,
             &sk_recip,
-            P256TAG_SALT.as_bytes(),
+            X25519TAG_SALT.as_bytes(),
             &self.ct,
         )
         .map_err(|_| ())
@@ -254,9 +234,9 @@ impl RecipientLine {
 }
 
 /// A decap-only version of [`Kem`] where the private key is stored on a YubiKey.
-struct YubiKeyDhP256HkdfSha256<'a>(PhantomData<&'a ()>);
+struct YubiKeyX25519HkdfSha256<'a>(PhantomData<&'a ()>);
 
-impl<'a> hpke::Kem for YubiKeyDhP256HkdfSha256<'a> {
+impl<'a> hpke::Kem for YubiKeyX25519HkdfSha256<'a> {
     type PublicKey = <Kem as hpke::Kem>::PublicKey;
     type PrivateKey = YubiKeyKemPrivateKey<'a, Kem>;
 
@@ -280,7 +260,7 @@ impl<'a> hpke::Kem for YubiKeyDhP256HkdfSha256<'a> {
         let mut sk_recip = sk_recip.conn.write().unwrap();
 
         // Put together the binding context used for all KDF operations
-        let suite_id = b"KEM\x00\x10";
+        let suite_id = b"KEM\x00\x20";
 
         // Compute the shared secret from the ephemeral inputs
         let kex_res_eph = sk_recip
@@ -289,7 +269,7 @@ impl<'a> hpke::Kem for YubiKeyDhP256HkdfSha256<'a> {
 
         // Compute the sender's pubkey from their privkey
         let pk_recip = match sk_recip.recipient() {
-            crate::recipient::Recipient::P256Tag(recipient) => &recipient.pk_recip,
+            crate::recipient::Recipient::X25519Tag(recipient) => &recipient.pk_recip,
             _ => panic!("should have been filtered out earlier"),
         };
 

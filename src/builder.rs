@@ -1,8 +1,16 @@
+use std::time::SystemTime;
+
 use dialoguer::Password;
-use rand::{rngs::OsRng, RngCore};
-use x509::RelativeDistinguishedName;
+use spki::{der::referenced::OwnedToRef, SubjectPublicKeyInfoOwned, SubjectPublicKeyInfoRef};
+use x509_cert::{
+    builder::{profile::BuilderProfile, Builder, CertificateBuilder},
+    certificate::Rfc5280,
+    name::Name,
+    serial_number::SerialNumber,
+    time::Validity,
+};
 use yubikey::{
-    certificate::Certificate,
+    certificate::{yubikey_signer, CertInfo, Certificate},
     piv::{generate as yubikey_generate, AlgorithmId, RetiredSlotId, SlotId},
     Key, PinPolicy, TouchPolicy, YubiKey,
 };
@@ -12,14 +20,45 @@ use crate::{
     fl,
     key::{self, Stub},
     native::p256tag,
-    util::{Metadata, POLICY_EXTENSION_OID},
+    util::{Metadata, UsagePolicies, OID_RSA},
     Recipient, BINARY_NAME, USABLE_SLOTS,
 };
 
+pub(crate) const DEFAULT_ALGORITHM: AlgorithmId = AlgorithmId::EccP256;
 pub(crate) const DEFAULT_PIN_POLICY: PinPolicy = PinPolicy::Once;
 pub(crate) const DEFAULT_TOUCH_POLICY: TouchPolicy = TouchPolicy::Always;
 
+struct SelfSigned {
+    subject: Name,
+}
+
+impl BuilderProfile for SelfSigned {
+    fn get_issuer(&self, subject: &Name) -> Name {
+        // RFC 5280 Section 3.2:
+        //
+        // > Self-issued certificates are CA certificates in which the issuer and subject
+        // > are the same entity. [..] Self-signed certificates are self-issued
+        // > certificates where the digital signature may be verified by the public key
+        // > bound into the certificate.
+        subject.clone()
+    }
+
+    fn get_subject(&self) -> Name {
+        self.subject.clone()
+    }
+
+    fn build_extensions(
+        &self,
+        _spk: SubjectPublicKeyInfoRef<'_>,
+        _issuer_spk: SubjectPublicKeyInfoRef<'_>,
+        _tbs: &x509_cert::TbsCertificate,
+    ) -> x509_cert::builder::Result<Vec<x509_cert::ext::Extension>> {
+        Ok(vec![])
+    }
+}
+
 pub(crate) struct IdentityBuilder {
+    algorithm: Option<AlgorithmId>,
     slot: Option<RetiredSlotId>,
     force: bool,
     name: Option<String>,
@@ -28,8 +67,9 @@ pub(crate) struct IdentityBuilder {
 }
 
 impl IdentityBuilder {
-    pub(crate) fn new(slot: Option<RetiredSlotId>) -> Self {
+    pub(crate) fn new(algorithm: Option<AlgorithmId>, slot: Option<RetiredSlotId>) -> Self {
         IdentityBuilder {
+            algorithm,
             slot,
             name: None,
             pin_policy: None,
@@ -59,6 +99,7 @@ impl IdentityBuilder {
     }
 
     pub(crate) fn build(self, yubikey: &mut YubiKey) -> Result<(Stub, Recipient, Metadata), Error> {
+        let algorithm = self.algorithm.unwrap_or(DEFAULT_ALGORITHM);
         let slot = match self.slot {
             Some(slot) => {
                 if !self.force {
@@ -85,8 +126,10 @@ impl IdentityBuilder {
             }
         };
 
-        let pin_policy = self.pin_policy.unwrap_or(DEFAULT_PIN_POLICY);
-        let touch_policy = self.touch_policy.unwrap_or(DEFAULT_TOUCH_POLICY);
+        let policies = UsagePolicies {
+            pin: self.pin_policy.unwrap_or(DEFAULT_PIN_POLICY),
+            touch: self.touch_policy.unwrap_or(DEFAULT_TOUCH_POLICY),
+        };
 
         eprintln!("{}", fl!("builder-gen-key"));
 
@@ -99,28 +142,31 @@ impl IdentityBuilder {
         let generated = yubikey_generate(
             yubikey,
             SlotId::Retired(slot),
-            AlgorithmId::EccP256,
-            pin_policy,
-            touch_policy,
+            algorithm,
+            policies.pin,
+            policies.touch,
         )?;
+        let generated_ref: SubjectPublicKeyInfoRef =
+            SubjectPublicKeyInfoOwned::owned_to_ref(&generated);
 
-        let recipient = Recipient::P256Tag(
-            p256tag::Recipient::from_spki(&generated).expect("YubiKey generates a valid pubkey"),
-        );
+        let recipient =
+            Recipient::from_spki(generated_ref).expect("YubiKey generates a valid pubkey");
         let stub = Stub::new(yubikey.serial(), slot, &recipient);
 
         eprintln!();
         eprintln!("{}", fl!("builder-gen-cert"));
 
         // Pick a random serial for the new self-signed certificate.
-        let mut serial = [0; 20];
-        OsRng.fill_bytes(&mut serial);
+        let serial = {
+            let mut csprng = rand::rng();
+            SerialNumber::generate(&mut csprng)
+        };
 
         let name = self
             .name
             .unwrap_or(format!("age identity {}", hex::encode(stub.tag)));
 
-        if let PinPolicy::Always = pin_policy {
+        if let PinPolicy::Always = policies.pin {
             // We need to enter the PIN again.
             let pin = Password::new()
                 .with_prompt(fl!(
@@ -131,35 +177,155 @@ impl IdentityBuilder {
                 .interact()?;
             yubikey.verify_pin(pin.as_bytes())?;
         }
-        if let TouchPolicy::Never = touch_policy {
-            // No need to touch YubiKey
-        } else {
-            eprintln!("{}", fl!("builder-touch-yk"));
+
+        match algorithm {
+            AlgorithmId::X25519 => {
+                let keys = Key::list(yubikey)?;
+                let sign_key = keys.iter().find(|p| p.slot() == SlotId::Signature);
+
+                // Either use an available signing key or use the builtin YubiKey attestation to
+                // generate a certificate since x25519 keys cannot sign for themselves.
+                let cert = match sign_key {
+                    Some(key) => {
+                        let mut builder = CertificateBuilder::new(
+                            SelfSigned {
+                                subject: format!(
+                                    "O={BINARY_NAME},OU={},CN={name}",
+                                    env!("CARGO_PKG_VERSION")
+                                )
+                                .parse()
+                                .map_err(Error::Build)?,
+                            },
+                            serial.clone(),
+                            Validity::<Rfc5280>::new(
+                                SystemTime::now().try_into().map_err(Error::Build)?,
+                                x509_cert::time::Time::INFINITY,
+                            ),
+                            generated.clone(),
+                        )
+                        .unwrap();
+                        builder
+                            .add_extension(&policies)
+                            .map_err(|e| match e {
+                                e => panic!(
+                                    "Cannot handle this error with the yubikey 0.8 crate: {e}"
+                                ),
+                            })
+                            .unwrap();
+                        // Match yubikey signer to signing key algorithm. Only supports RSA or P256
+                        // without adding another external library.
+                        let cert = match key.certificate().subject_pki().algorithm.oid {
+                            OID_RSA => {
+                                // Need to determine RSA key type. Uses less than comparison
+                                // because key length includes header and length info in TLV.
+                                let length =
+                                    key.certificate().subject_pki().subject_public_key.bit_len();
+                                if length < 2048 {
+                                    let signer = yubikey_signer::Signer::<
+                                        '_,
+                                        yubikey_signer::YubiRsa<yubikey_signer::Rsa1024>,
+                                    >::new(
+                                        yubikey,
+                                        key.slot(),
+                                        key.certificate().subject_pki(),
+                                    )?;
+                                    builder.build(&signer).expect("signature")
+                                } else if length < 3072 {
+                                    let signer = yubikey_signer::Signer::<
+                                        '_,
+                                        yubikey_signer::YubiRsa<yubikey_signer::Rsa2048>,
+                                    >::new(
+                                        yubikey,
+                                        key.slot(),
+                                        key.certificate().subject_pki(),
+                                    )?;
+                                    builder.build(&signer).expect("signature")
+                                } else if length < 4096 {
+                                    let signer = yubikey_signer::Signer::<
+                                        '_,
+                                        yubikey_signer::YubiRsa<yubikey_signer::Rsa3072>,
+                                    >::new(
+                                        yubikey,
+                                        key.slot(),
+                                        key.certificate().subject_pki(),
+                                    )?;
+                                    builder.build(&signer).expect("signature")
+                                } else {
+                                    let signer = yubikey_signer::Signer::<
+                                        '_,
+                                        yubikey_signer::YubiRsa<yubikey_signer::Rsa4096>,
+                                    >::new(
+                                        yubikey,
+                                        key.slot(),
+                                        key.certificate().subject_pki(),
+                                    )?;
+                                    builder.build(&signer).expect("signature")
+                                }
+                            }
+                            p256tag::OID_P256 => {
+                                let signer = yubikey_signer::Signer::<'_, p256::NistP256>::new(
+                                    yubikey,
+                                    key.slot(),
+                                    key.certificate().subject_pki(),
+                                )?;
+                                builder.build(&signer).expect("signature")
+                            }
+                            _ => panic!("No supported signing key available"),
+                        };
+                        let cert = Certificate { cert };
+                        cert.write(yubikey, SlotId::Retired(slot), CertInfo::Uncompressed)
+                            .unwrap();
+                        cert
+                    }
+                    None => {
+                        let buf = yubikey::piv::attest(yubikey, SlotId::Retired(slot))?;
+                        let cert = Certificate::from_bytes(buf)?;
+                        let _ = cert.write(yubikey, SlotId::Retired(slot), CertInfo::Uncompressed);
+                        cert
+                    }
+                };
+                let metadata = Metadata::extract(yubikey, slot, &cert, true).unwrap();
+
+                Ok((
+                    Stub::new(yubikey.serial(), slot, &recipient),
+                    recipient,
+                    metadata,
+                ))
+            }
+            _ => {
+                if let TouchPolicy::Never = policies.touch {
+                    // No need to touch YubiKey
+                } else {
+                    eprintln!("{}", fl!("builder-touch-yk"));
+                }
+                let cert = Certificate::generate_self_signed::<_, p256::NistP256>(
+                    yubikey,
+                    SlotId::Retired(slot),
+                    serial,
+                    Validity::new(
+                        SystemTime::now().try_into().map_err(Error::Build)?,
+                        x509_cert::time::Time::INFINITY,
+                    ),
+                    // TODO: https://github.com/RustCrypto/formats/issues/1489
+                    format!("O={BINARY_NAME},OU={},CN={name}", env!("CARGO_PKG_VERSION"))
+                        .parse()
+                        .map_err(Error::Build)?,
+                    generated,
+                    |builder| {
+                        builder.add_extension(&policies).map_err(|e| match e {
+                            _ => panic!("Cannot handle this error with the yubikey 0.8 crate: {e}"),
+                        })
+                    },
+                )?;
+
+                let metadata = Metadata::extract(yubikey, slot, &cert, false).unwrap();
+
+                Ok((
+                    Stub::new(yubikey.serial(), slot, &recipient),
+                    recipient,
+                    metadata,
+                ))
+            }
         }
-
-        let cert = Certificate::generate_self_signed(
-            yubikey,
-            SlotId::Retired(slot),
-            serial,
-            None,
-            &[
-                RelativeDistinguishedName::organization(BINARY_NAME),
-                RelativeDistinguishedName::organizational_unit(env!("CARGO_PKG_VERSION")),
-                RelativeDistinguishedName::common_name(&name),
-            ],
-            generated,
-            &[x509::Extension::regular(
-                POLICY_EXTENSION_OID,
-                &[pin_policy.into(), touch_policy.into()],
-            )],
-        )?;
-
-        let metadata = Metadata::extract(yubikey, slot, &cert, false).unwrap();
-
-        Ok((
-            Stub::new(yubikey.serial(), slot, &recipient),
-            recipient,
-            metadata,
-        ))
     }
 }
