@@ -19,10 +19,10 @@ use yubikey::{
 use crate::{
     error::Error,
     fl,
-    key::{self, Stub},
+    key::{self, save_kem_seed, Stub},
     native::{mlkem768x25519tag, p256tag},
     plugin::SupportedTag,
-    util::{Metadata, MlKem768Extension, UsagePolicies, OID_RSA},
+    util::{Metadata, UsagePolicies, OID_RSA},
     Recipient, BINARY_NAME, USABLE_SLOTS,
 };
 
@@ -214,18 +214,6 @@ impl IdentityBuilder {
                                 ),
                             })
                             .unwrap();
-                        if tag == SupportedTag::MlKem768X25519Tag {
-                            let mut csprng = rand::rng();
-                            let (dk, _ek) =
-                                mlkem768x25519tag::MlKem768X25519::gen_keypair(&mut csprng);
-                            let kem_policy = MlKem768Extension::from_bytes(dk.as_bytes());
-                            builder
-                                .add_extension(&kem_policy)
-                                .map_err(|e| match e {
-                                    _ => panic!("Cannot add ML-KEM seed to certificate"),
-                                })
-                                .unwrap();
-                        }
                         // Match yubikey signer to signing key algorithm. Only supports RSA or P256
                         // without adding another external library.
                         let cert = match key.certificate().subject_pki().algorithm.oid {
@@ -302,7 +290,13 @@ impl IdentityBuilder {
 
                 match tag {
                     SupportedTag::MlKem768X25519Tag => {
-                        let recipient = Recipient::from_certificate(&cert).unwrap();
+                        let mut csprng = rand::rng();
+                        let (dk, _ek) = mlkem768x25519tag::MlKem768X25519::gen_keypair(&mut csprng);
+                        save_kem_seed(yubikey, slot, dk.as_bytes())
+                            .expect("kem seed saved to yubikey");
+                        let recipient = mlkem768x25519tag::Recipient::from(&cert, dk.as_bytes())
+                            .map(Recipient::MlKem768X25519)
+                            .expect("recipient");
                         Ok((
                             Stub::new(yubikey.serial(), slot, &recipient),
                             recipient,

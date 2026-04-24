@@ -3,13 +3,12 @@ use std::fmt;
 use age_core::format::{FileKey, Stanza};
 use sha2::{Digest, Sha256};
 use x509_cert::spki::SubjectPublicKeyInfoRef;
-use yubikey::Certificate;
 
 use crate::{
     native::{self, mlkem768x25519tag, p256tag, x25519tag},
     piv_p256, piv_x25519,
     plugin::SupportedTag,
-    util::{Metadata, MlKem768Extension},
+    util::Metadata,
     PLUGIN_NAME,
 };
 
@@ -73,25 +72,6 @@ impl Recipient {
         match spki.algorithm.oid {
             p256tag::OID_P256 => p256tag::Recipient::from_spki(spki).map(Self::P256Tag),
             x25519tag::OID_X25519 => x25519tag::Recipient::from_spki(spki).map(Self::X25519Tag),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn from_certificate(cert: &Certificate) -> Option<Self> {
-        match cert.subject_pki().algorithm.oid {
-            p256tag::OID_P256 => Self::from_spki(cert.subject_pki()),
-            x25519tag::OID_X25519 => {
-                match cert
-                    .cert
-                    .tbs_certificate()
-                    .get_extension::<MlKem768Extension>()
-                    .expect("decode extension")
-                {
-                    Some(_) => mlkem768x25519tag::Recipient::from_certificate(cert)
-                        .map(Self::MlKem768X25519),
-                    None => Self::from_spki(cert.subject_pki()),
-                }
-            }
             _ => None,
         }
     }

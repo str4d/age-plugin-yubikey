@@ -23,7 +23,7 @@ use yubikey::{
 };
 
 use crate::native::{mlkem768x25519tag, x25519tag};
-use crate::util::{MlKem768Extension, ML_KEM_768_EXTENSION_OID};
+use crate::util::ML_KEM_768_EXTENSION_OID;
 use crate::{
     error::Error,
     fl,
@@ -38,6 +38,84 @@ const TAG_BYTES: usize = 4;
 
 /// The set of OIDs that we understand and use when parsing YubiKey slot certificates.
 const KNOWN_OIDS: &[ObjectIdentifier] = &[POLICY_EXTENSION_OID, ML_KEM_768_EXTENSION_OID];
+
+// Use the undefined data tags to store the hybrid Kem seed
+// https://docs.yubico.com/yesdk/users-manual/application-piv/piv-objects.html#table-1c-undefined-datatags
+// Better security may be to have the paired key do a DH and store the shared secret
+pub(crate) enum DataTagId {
+    D1,
+    D2,
+    D3,
+    D4,
+    D5,
+    D6,
+    D7,
+    D8,
+    D9,
+    D10,
+    D11,
+    D12,
+    D13,
+    D14,
+    D15,
+    D16,
+    D17,
+    D18,
+    D19,
+    D20,
+}
+
+impl DataTagId {
+    pub(crate) fn from(slot: RetiredSlotId) -> Self {
+        match slot {
+            RetiredSlotId::R1 => Self::D1,
+            RetiredSlotId::R2 => Self::D2,
+            RetiredSlotId::R3 => Self::D3,
+            RetiredSlotId::R4 => Self::D4,
+            RetiredSlotId::R5 => Self::D5,
+            RetiredSlotId::R6 => Self::D6,
+            RetiredSlotId::R7 => Self::D7,
+            RetiredSlotId::R8 => Self::D8,
+            RetiredSlotId::R9 => Self::D9,
+            RetiredSlotId::R10 => Self::D10,
+            RetiredSlotId::R11 => Self::D11,
+            RetiredSlotId::R12 => Self::D12,
+            RetiredSlotId::R13 => Self::D13,
+            RetiredSlotId::R14 => Self::D14,
+            RetiredSlotId::R15 => Self::D15,
+            RetiredSlotId::R16 => Self::D16,
+            RetiredSlotId::R17 => Self::D17,
+            RetiredSlotId::R18 => Self::D18,
+            RetiredSlotId::R19 => Self::D19,
+            RetiredSlotId::R20 => Self::D20,
+        }
+    }
+
+    pub(crate) fn object_id(&self) -> u32 {
+        match self {
+            Self::D1 => 0x005f_0000,
+            Self::D2 => 0x005f_0001,
+            Self::D3 => 0x005f_0002,
+            Self::D4 => 0x005f_0003,
+            Self::D5 => 0x005f_0004,
+            Self::D6 => 0x005f_0005,
+            Self::D7 => 0x005f_0006,
+            Self::D8 => 0x005f_0007,
+            Self::D9 => 0x005f_0008,
+            Self::D10 => 0x005f_0009,
+            Self::D11 => 0x005f_0010,
+            Self::D12 => 0x005f_0011,
+            Self::D13 => 0x005f_0012,
+            Self::D14 => 0x005f_0013,
+            Self::D15 => 0x005f_0014,
+            Self::D16 => 0x005f_0015,
+            Self::D17 => 0x005f_0016,
+            Self::D18 => 0x005f_0017,
+            Self::D19 => 0x005f_0018,
+            Self::D20 => 0x005f_0018,
+        }
+    }
+}
 
 pub(crate) fn is_connected(reader: Reader) -> bool {
     filter_connected(&reader)
@@ -394,7 +472,7 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
 }
 
 /// Parses the certificate to identify the preferred recipient type it corresponds to.
-pub(crate) fn identify_recipient(cert: &Certificate) -> Option<Recipient> {
+pub(crate) fn identify_recipient(cert: &Certificate, seed: Option<[u8; 32]>) -> Option<Recipient> {
     let known_oids = KNOWN_OIDS.iter().collect::<Vec<_>>();
 
     // If the certificate contains any unrecognised critical extensions, reject it: we
@@ -416,21 +494,17 @@ pub(crate) fn identify_recipient(cert: &Certificate) -> Option<Recipient> {
         return None;
     }
 
-    match cert.subject_pki().algorithm.oid {
-        p256tag::OID_P256 => p256tag::Recipient::from_certificate(cert).map(Recipient::P256Tag),
-        x25519tag::OID_X25519 => {
-            match cert
-                .cert
-                .tbs_certificate()
-                .get_extension::<MlKem768Extension>()
-                .expect("decode extension")
-            {
-                Some(_) => mlkem768x25519tag::Recipient::from_certificate(cert)
-                    .map(Recipient::MlKem768X25519),
-                None => x25519tag::Recipient::from_certificate(cert).map(Recipient::X25519Tag),
-            }
+    match seed {
+        Some(seed) => {
+            return mlkem768x25519tag::Recipient::from(&cert, &seed).map(Recipient::MlKem768X25519)
         }
-        _ => None,
+        None => match cert.subject_pki().algorithm.oid {
+            p256tag::OID_P256 => p256tag::Recipient::from_certificate(cert).map(Recipient::P256Tag),
+            x25519tag::OID_X25519 => {
+                x25519tag::Recipient::from_certificate(cert).map(Recipient::X25519Tag)
+            }
+            _ => None,
+        },
     }
 }
 
@@ -439,24 +513,46 @@ pub(crate) fn identify_recipient(cert: &Certificate) -> Option<Recipient> {
 pub(crate) fn list_slots(
     yubikey: &mut YubiKey,
 ) -> Result<impl Iterator<Item = (Key, RetiredSlotId, Option<Recipient>)>, Error> {
-    Ok(Key::list(yubikey)?.into_iter().filter_map(|key| {
-        // We only use the retired slots.
-        match key.slot() {
-            SlotId::Retired(slot) => {
-                let recipient = identify_recipient(key.certificate());
-                Some((key, slot, recipient))
-            }
-            _ => None,
+    let mut out = Vec::new();
+    for key in Key::list(yubikey)? {
+        if let SlotId::Retired(slot) = key.slot() {
+            let seed = fetch_kem_seed(yubikey, slot);
+            let recipient = identify_recipient(key.certificate(), seed);
+            out.push((key, slot, recipient));
         }
-    }))
+    }
+    Ok(out.into_iter())
 }
 
 /// Returns an iterator of keys that are compatible with this plugin.
 pub(crate) fn list_compatible(
     yubikey: &mut YubiKey,
 ) -> Result<impl Iterator<Item = (Key, RetiredSlotId, Recipient)>, Error> {
-    list_slots(yubikey)
-        .map(|iter| iter.filter_map(|(key, slot, res)| res.map(|recipient| (key, slot, recipient))))
+    list_slots(yubikey).map(|iter| {
+        iter.into_iter()
+            .filter_map(|(key, slot, res)| res.map(|recipient| (key, slot, recipient)))
+    })
+}
+
+pub(crate) fn fetch_kem_seed(yubikey: &mut YubiKey, slot: RetiredSlotId) -> Option<[u8; 32]> {
+    let data_tag = DataTagId::from(slot);
+    match yubikey.fetch_object(data_tag.object_id()) {
+        Ok(seed) => {
+            let seed: [u8; 32] = seed.as_slice().try_into().expect("seed length");
+            Some(seed)
+        }
+        Err(_) => None,
+    }
+}
+
+pub(crate) fn save_kem_seed(
+    yubikey: &mut YubiKey,
+    slot: RetiredSlotId,
+    seed: &[u8],
+) -> Result<(), yubikey::Error> {
+    let data_tag = DataTagId::from(slot);
+    let mut seed: [u8; 32] = seed.try_into().expect("seed length");
+    yubikey.save_object(data_tag.object_id(), &mut seed)
 }
 
 /// A reference to an age key stored in a YubiKey.
@@ -637,12 +733,14 @@ impl Stub {
             }
         };
 
+        let seed = fetch_kem_seed(&mut yubikey, self.slot);
+
         // Read the pubkey from the YubiKey slot and check it still matches.
         let (cert, pk) = match Certificate::read(&mut yubikey, SlotId::Retired(self.slot))
             .ok()
             .and_then(|cert| {
                 // Parse as the preferred recipient for each identity type.
-                identify_recipient(&cert)
+                identify_recipient(&cert, seed)
                     .filter(|recipient| recipient.static_tag() == self.tag)
                     .map(|r| (cert, r))
             }) {
@@ -681,6 +779,10 @@ impl Connection {
     /// Returns the preferred recipient for encrypting to this identity.
     pub(crate) fn recipient(&self) -> &Recipient {
         &self.pk
+    }
+
+    pub(crate) fn seed(&mut self) -> [u8; 32] {
+        fetch_kem_seed(&mut self.yubikey, self.slot).expect("kem seed")
     }
 
     pub(crate) fn cert(&self) -> &Certificate {

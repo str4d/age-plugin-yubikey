@@ -1,10 +1,7 @@
 use std::fmt;
 use std::iter;
 
-use base64::{
-    prelude::{BASE64_STANDARD, BASE64_STANDARD_NO_PAD},
-    Engine,
-};
+use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use const_oid::{AssociatedOid, ObjectIdentifier};
 use x509_cert::{
     der::{
@@ -99,91 +96,6 @@ impl ToExtension for UsagePolicies {
 }
 
 impl Criticality for UsagePolicies {
-    fn criticality(
-        &self,
-        _subject: &x509_cert::name::Name,
-        _extensions: &[x509_cert::ext::Extension],
-    ) -> bool {
-        false
-    }
-}
-
-pub struct MlKem768Extension([u8; 32]);
-
-impl MlKem768Extension {
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        &self.0
-    }
-
-    pub(crate) fn from_bytes(encoded: &[u8]) -> Self {
-        let bytes: [u8; 32] = encoded.try_into().expect("secret length");
-        Self(bytes)
-    }
-}
-
-impl AssociatedOid for MlKem768Extension {
-    const OID: ObjectIdentifier = ML_KEM_768_EXTENSION_OID;
-}
-
-impl der::Encode for MlKem768Extension {
-    fn encoded_len(&self) -> der::Result<der::Length> {
-        let length: u32 = base64::encoded_len(32, true)
-            .unwrap()
-            .try_into()
-            .expect("encoded length");
-        Ok(der::Length::new(length))
-    }
-
-    fn encode(&self, encoder: &mut impl der::Writer) -> der::Result<()> {
-        let size: usize = base64::encoded_len(32, true).unwrap();
-        let mut encoded_bytes: Vec<u8> = Vec::new();
-        encoded_bytes.resize(size, 0);
-        BASE64_STANDARD
-            .encode_slice(self.0, &mut encoded_bytes)
-            .expect("encoded seed");
-        encoder.write(&encoded_bytes)
-    }
-}
-
-impl<'a> der::Decode<'a> for MlKem768Extension {
-    type Error = der::Error;
-
-    fn decode<R: der::Reader<'a>>(decoder: &mut R) -> der::Result<Self> {
-        let size: usize = base64::encoded_len(32, true).unwrap();
-        let mut encoded_bytes: Vec<u8> = Vec::new();
-        encoded_bytes.resize(size, 0);
-        decoder.read_into(&mut encoded_bytes).expect("base64 read");
-
-        let decoded_size = base64::decoded_len_estimate(size);
-        let mut decoded_bytes: Vec<u8> = Vec::new();
-        decoded_bytes.resize(decoded_size, 0);
-        BASE64_STANDARD
-            .decode_slice(encoded_bytes, &mut decoded_bytes)
-            .map_err(|_| der::ErrorKind::Failed)?;
-        let mut seed: [u8; 32] = [0; 32];
-        seed.copy_from_slice(&decoded_bytes[..32]);
-        Ok(Self(seed))
-    }
-}
-
-impl ToExtension for MlKem768Extension {
-    type Error = der::Error;
-    fn to_extension(
-        self,
-        _subject: &x509_cert::name::Name,
-        _extensions: &[x509_cert::ext::Extension],
-    ) -> Result<x509_cert::ext::Extension, Self::Error> {
-        // TODO: https://github.com/RustCrypto/formats/issues/1490
-        let extn_value: &[u8; 23] = b"1.3.6.1.4.1.55738.666.5";
-        Ok(x509_cert::ext::Extension {
-            extn_id: ML_KEM_768_EXTENSION_OID,
-            critical: false,
-            extn_value: OctetString::new(*extn_value)?,
-        })
-    }
-}
-
-impl Criticality for MlKem768Extension {
     fn criticality(
         &self,
         _subject: &x509_cert::name::Name,

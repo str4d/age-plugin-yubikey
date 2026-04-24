@@ -19,7 +19,7 @@ use super::{stanza_tag, YubiKeyKemPrivateKey};
 use crate::{
     key::{self, Connection},
     recipient::static_tag,
-    util::{base64_arg, MlKem768Extension},
+    util::base64_arg,
 };
 
 const RECIPIENT_PREFIX: bech32::Hrp = bech32::Hrp::parse_unchecked("age1tagpq");
@@ -175,27 +175,6 @@ pub struct PrivateKey {
 impl PrivateKey {
     pub fn as_bytes(&self) -> &[u8] {
         &self.seed
-    }
-
-    pub fn try_from_certificate(cert: &Certificate) -> Result<Self, hpke::HpkeError> {
-        match cert
-            .cert
-            .tbs_certificate()
-            .get_extension::<MlKem768Extension>()
-            .expect("decode extension")
-            .expect("Kem seed")
-        {
-            (false, ext) => {
-                let seed: &[u8; 32] = ext.as_bytes();
-                let expanded_key: ExpandedKey = ExpandedKey::from(seed);
-                Ok(Self {
-                    seed: seed.clone(),
-                    dk_pq: expanded_key.dk_pq,
-                    dk_t: expanded_key.dk_t,
-                })
-            }
-            _ => Err(hpke::HpkeError::InvalidPskBundle),
-        }
     }
 }
 
@@ -388,7 +367,7 @@ impl<'a> KemTrait for YubiKeyMlKem768X25519<'a> {
         encapped_key: &Self::EncappedKey,
     ) -> Result<hpke::kem::SharedSecret<Self>, hpke::HpkeError> {
         let mut sk_recip = sk_recip.conn.write().unwrap();
-        let dk_pq = PrivateKey::try_from_certificate(sk_recip.cert())
+        let dk_pq = PrivateKey::from_bytes(&sk_recip.seed())
             .expect("dk_pq from cert")
             .dk_pq;
 
@@ -462,9 +441,9 @@ impl Recipient {
         }
     }
 
-    pub(crate) fn from_certificate(cert: &Certificate) -> Option<Self> {
-        let dk = PrivateKey::try_from_certificate(cert).expect("dk from cert");
-        let expanded_key = ExpandedKey::from(&dk.seed);
+    pub(crate) fn from(cert: &Certificate, seed: &[u8]) -> Option<Self> {
+        let seed: [u8; 32] = seed.try_into().expect("seed length");
+        let expanded_key = ExpandedKey::from(&seed);
 
         let mut ek_bytes = [0; 1216];
         ek_bytes[..1184].copy_from_slice(&expanded_key.ek_pq.to_bytes());
