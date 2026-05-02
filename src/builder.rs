@@ -115,6 +115,12 @@ impl IdentityBuilder {
         // Pick a random serial for the new self-signed certificate.
         let mut serial = [0; 20];
         OsRng.fill_bytes(&mut serial);
+        // RFC 5280 §4.1.2.2: serial is a DER INTEGER, max 20 bytes.
+        // If the MSB of the first byte is set, DER encoding prepends a 0x00
+        // sign-extension byte, making the encoded length 21 bytes and causing
+        // x509-cert / der to return Overlength (~50% probability).
+        // Mask the high bit to guarantee the value is positive and fits.
+        serial[0] &= 0x7f;
 
         let name = self
             .name
