@@ -579,6 +579,12 @@ impl Stub {
         let mut yubikey = match open_by_serial(self.serial) {
             Ok(yk) => yk,
             Err(yubikey::Error::NotFound) => {
+
+                // Skips identities for non-connected YubiKeys without prompting
+                if std::env::var_os("AGE_PLUGIN_YUBIKEY_SKIP_NOT_FOUND").is_some() {
+                    return Ok(Ok(None));
+                }
+
                 let mut message = fl!("plugin-insert-yk", yubikey_serial = self.serial.to_string());
 
                 // If the `confirm` command is available, we loop until either the YubiKey
