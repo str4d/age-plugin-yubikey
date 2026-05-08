@@ -9,6 +9,11 @@ to 0.3.0 are beta releases.
 ## [Unreleased]
 
 ### Added
+- `AGE_PLUGIN_YUBIKEY_SKIP_NOT_FOUND` environment variable. When set, the
+  plugin silently skips identities for YubiKeys whose serial isn't currently
+  connected, instead of prompting the user to insert that specific YubiKey.
+  Useful for non-interactive contexts (e.g. deploys) and setups with multiple
+  YubiKeys where only one is connected at a time.
 - Support for the native non-hybrid tagged recipient type (`age1tag1..`).
   - Encryption requires making the `age-plugin-yubikey` binary available on the
     `PATH` as `age-plugin-tag`, or upgrading to a client version that builds in
