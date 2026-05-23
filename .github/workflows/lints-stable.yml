@@ -3,17 +3,24 @@ name: Stable lints
 # We only run these lints on trial-merges of PRs to reduce noise.
 on: pull_request
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   clippy:
     name: Clippy (MSRV)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install build dependencies
         run: sudo apt install libpcsclite-dev
-      - name: Run clippy
-        uses: actions-rs/clippy-check@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          name: Clippy (MSRV)
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features --all-targets -- -D warnings
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Run clippy
+        run: cargo clippy --all-features --all-targets -- -D warnings
