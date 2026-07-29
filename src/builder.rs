@@ -1,6 +1,11 @@
 use dialoguer::Password;
-use rand::{rngs::OsRng, RngCore};
-use x509::RelativeDistinguishedName;
+use getrandom::{rand_core::UnwrapErr, SysRng};
+use x509_cert::{
+    der::{asn1::OctetString, referenced::OwnedToRef},
+    ext::Extension,
+    serial_number::SerialNumber,
+    time::Validity,
+};
 use yubikey::{
     certificate::Certificate,
     piv::{generate as yubikey_generate, AlgorithmId, RetiredSlotId, SlotId},
@@ -105,7 +110,8 @@ impl IdentityBuilder {
         )?;
 
         let recipient = Recipient::P256Tag(
-            p256tag::Recipient::from_spki(&generated).expect("YubiKey generates a valid pubkey"),
+            p256tag::Recipient::from_spki(generated.owned_to_ref())
+                .expect("YubiKey generates a valid pubkey"),
         );
         let stub = Stub::new(yubikey.serial(), slot, &recipient);
 
@@ -113,8 +119,7 @@ impl IdentityBuilder {
         eprintln!("{}", fl!("builder-gen-cert"));
 
         // Pick a random serial for the new self-signed certificate.
-        let mut serial = [0; 20];
-        OsRng.fill_bytes(&mut serial);
+        let serial = SerialNumber::generate(&mut UnwrapErr(SysRng));
 
         let name = self
             .name
@@ -137,21 +142,27 @@ impl IdentityBuilder {
             eprintln!("{}", fl!("builder-touch-yk"));
         }
 
-        let cert = Certificate::generate_self_signed(
+        let policy_extension = Extension {
+            extn_id: POLICY_EXTENSION_OID,
+            critical: false,
+            extn_value: OctetString::new(vec![pin_policy.into(), touch_policy.into()])
+                .expect("valid"),
+        };
+
+        // TODO: https://github.com/iqlusioninc/yubikey.rs/issues/581
+        let cert = Certificate::generate_self_signed::<_, p256_v0_14::NistP256>(
             yubikey,
             SlotId::Retired(slot),
             serial,
-            None,
-            &[
-                RelativeDistinguishedName::organization(BINARY_NAME),
-                RelativeDistinguishedName::organizational_unit(env!("CARGO_PKG_VERSION")),
-                RelativeDistinguishedName::common_name(&name),
-            ],
+            // The original certificate never expired; preserve that behaviour.
+            Validity::infinity().map_err(Error::Build)?,
+            // TODO: https://github.com/RustCrypto/formats/issues/1489
+            format!("O={BINARY_NAME},OU={},CN={name}", env!("CARGO_PKG_VERSION"))
+                .parse()
+                .map_err(Error::Build)?,
             generated,
-            &[x509::Extension::regular(
-                POLICY_EXTENSION_OID,
-                &[pin_policy.into(), touch_policy.into()],
-            )],
+            // TODO: https://github.com/iqlusioninc/yubikey.rs/issues/580
+            |builder| builder.add_extension(policy_extension),
         )?;
 
         let metadata = Metadata::extract(yubikey, slot, &cert, false).unwrap();

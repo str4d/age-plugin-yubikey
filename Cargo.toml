@@ -9,7 +9,7 @@ keywords = ["age", "cli", "encryption", "yubikey"]
 categories = ["command-line-utilities", "cryptography"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
-rust-version = "1.70" # MSRV
+rust-version = "1.85" # MSRV
 
 [package.metadata.deb]
 extended-description = """\
@@ -26,22 +26,25 @@ age-core = "0.11"
 age-plugin = "0.6"
 base64 = "0.22"
 bech32 = "0.11"
+chrono = "0.4"
 console = { version = "0.15", default-features = false }
+const-oid = { version = "0.10", features = ["db"] }
 dialoguer = { version = "0.11", default-features = false, features = ["password"] }
 env_logger = "0.10"
+getrandom = { version = "0.4", features = ["sys_rng"] }
 gumdrop = "0.8"
 hex = "0.4"
 hkdf = "0.12"
 hpke = { version = "0.12", default-features = false, features = ["alloc", "p256"] }
 log = "0.4"
 p256 = { version = "0.13", features = ["ecdh"] }
+p256_v0_14 = { package = "p256", version = "0.14", default-features = false, features = ["ecdsa"] }
 pcsc = "2.4"
 rand = "0.8"
 sha2 = "0.10"
 which = "5"
-x509 = "0.2"
-x509-parser = "0.14"
-yubikey = { version = "=0.8.0-pre.0", features = ["untested"] }
+x509-cert = "0.3"
+yubikey = { version = "=0.9.0-pre.0", features = ["untested"] }
 
 # Translations
 i18n-embed = { version = "0.15", features = ["desktop-requester", "fluent-system"] }
