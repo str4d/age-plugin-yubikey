@@ -13,7 +13,8 @@ use p256::{
     EncodedPoint,
 };
 use rand::rngs::OsRng;
-use yubikey::{certificate::PublicKeyInfo, Certificate};
+use x509_cert::spki::SubjectPublicKeyInfoRef;
+use yubikey::Certificate;
 
 use super::{stanza_tag, YubiKeyKemPrivateKey};
 use crate::{
@@ -89,16 +90,13 @@ impl Recipient {
         Self::from_spki(cert.subject_pki())
     }
 
-    pub(crate) fn from_spki(spki: &PublicKeyInfo) -> Option<Self> {
-        let encoded = match spki {
-            PublicKeyInfo::EcP256(pubkey) => Some(pubkey),
-            _ => None,
-        }?;
+    pub(crate) fn from_spki(spki: SubjectPublicKeyInfoRef<'_>) -> Option<Self> {
+        let encoded = p256::EncodedPoint::from_bytes(spki.subject_public_key.as_bytes()?).ok()?;
+        let point = p256::PublicKey::from_encoded_point(&encoded).into_option()?;
 
-        // Check that the certificate encoding is uncompressed.
+        // Enforce uncompressed encoding (HPKE).
         let pk_recip = <Kem as hpke::Kem>::PublicKey::from_bytes(encoded.as_bytes()).ok()?;
 
-        let point = p256::PublicKey::from_encoded_point(encoded).into_option()?;
         let compressed = point.to_encoded_point(true);
 
         Some(Self {
