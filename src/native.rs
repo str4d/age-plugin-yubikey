@@ -25,34 +25,34 @@ impl<'a, Kem> YubiKeyKemPrivateKey<'a, Kem> {
     fn new(conn: &'a mut Connection) -> Self {
         Self {
             conn: Rc::new(RwLock::new(conn)),
-            _kem: PhantomData::default(),
+            _kem: PhantomData,
         }
     }
 }
 
-impl<'a, Kem> Clone for YubiKeyKemPrivateKey<'a, Kem> {
+impl<Kem> Clone for YubiKeyKemPrivateKey<'_, Kem> {
     fn clone(&self) -> Self {
         Self {
             conn: self.conn.clone(),
-            _kem: PhantomData::default(),
+            _kem: PhantomData,
         }
     }
 }
 
-impl<'a, Kem> PartialEq for YubiKeyKemPrivateKey<'a, Kem> {
+impl<Kem> PartialEq for YubiKeyKemPrivateKey<'_, Kem> {
     fn eq(&self, other: &Self) -> bool {
         self.conn.read().unwrap().stub() == other.conn.read().unwrap().stub()
     }
 }
-impl<'a, Kem> Eq for YubiKeyKemPrivateKey<'a, Kem> {}
+impl<Kem> Eq for YubiKeyKemPrivateKey<'_, Kem> {}
 
-impl<'a, Kem: hpke::Kem> hpke::Serializable for YubiKeyKemPrivateKey<'a, Kem> {
+impl<Kem: hpke::Kem> hpke::Serializable for YubiKeyKemPrivateKey<'_, Kem> {
     type OutputSize = <Kem::PrivateKey as hpke::Serializable>::OutputSize;
     fn write_exact(&self, _: &mut [u8]) {
         unreachable!("Never called")
     }
 }
-impl<'a, Kem: hpke::Kem> hpke::Deserializable for YubiKeyKemPrivateKey<'a, Kem> {
+impl<Kem: hpke::Kem> hpke::Deserializable for YubiKeyKemPrivateKey<'_, Kem> {
     fn from_bytes(_: &[u8]) -> Result<Self, hpke::HpkeError> {
         unreachable!("Never called")
     }

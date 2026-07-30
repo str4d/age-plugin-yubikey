@@ -207,21 +207,12 @@ impl IdentityPluginV1 for IdentityPlugin {
         }
 
         // Sort by effectiveness (YubiKey that can trial-decrypt the most stanzas)
-        candidate_stanzas.sort_by_key(|(_, files)| {
-            files
-                .iter()
-                .map(|(_, stanzas)| stanzas.len())
-                .sum::<usize>()
-        });
+        candidate_stanzas
+            .sort_by_key(|(_, files)| files.values().map(|stanzas| stanzas.len()).sum::<usize>());
         candidate_stanzas.reverse();
         // Remove any YubiKeys without stanzas.
-        candidate_stanzas.retain(|(_, files)| {
-            files
-                .iter()
-                .map(|(_, stanzas)| stanzas.len())
-                .sum::<usize>()
-                > 0
-        });
+        candidate_stanzas
+            .retain(|(_, files)| files.values().map(|stanzas| stanzas.len()).sum::<usize>() > 0);
 
         for (stub, files) in candidate_stanzas.iter() {
             let mut conn = match stub.connect(&mut callbacks)? {
