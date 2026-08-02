@@ -539,7 +539,6 @@ impl RecipientLine {
     }
 
     pub(crate) fn matches_stub(&self, stub: &key::Stub) -> bool {
-        assert_eq!(self.tag, tag(&self.enc, stub.tag));
         self.tag == tag(&self.enc, stub.tag)
     }
 
