@@ -4,53 +4,35 @@ use age_core::{
     secrecy::{zeroize::Zeroize, ExposeSecret},
 };
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
-use p256::{
-    ecdh::EphemeralSecret,
-    elliptic_curve::{
-        common::Generate,
-        sec1::{FromSec1Point, ToSec1Point},
-    },
-};
+use x25519_dalek::{EphemeralSecret, PublicKey};
 
-use crate::{key::Connection, recipient::TAG_BYTES, util::base64_arg};
+use crate::{key::Connection, util::base64_arg};
+
+pub(crate) const TAG_BYTES: usize = 4;
+pub(crate) const STANZA_TAG: &str = "piv-x25519";
+
+const EPK_BYTES: usize = 32;
+pub(crate) const STANZA_KEY_LABEL: &[u8] = b"piv-x25519";
+const ENCRYPTED_FILE_KEY_BYTES: usize = 32;
 
 mod recipient;
 pub(crate) use recipient::Recipient;
 
-pub(crate) const STANZA_TAG: &str = "piv-p256";
-pub(crate) const STANZA_KEY_LABEL: &[u8] = b"piv-p256";
-
-const EPK_BYTES: usize = 33;
-const ENCRYPTED_FILE_KEY_BYTES: usize = 32;
-
-/// The ephemeral key bytes in a piv-p256 stanza.
-///
-/// The bytes contain a compressed SEC-1 encoding of a valid point.
 #[derive(Debug)]
-pub(crate) struct EphemeralKeyBytes(p256::Sec1Point);
+pub(crate) struct EphemeralKeyBytes(x25519_dalek::PublicKey);
 
 impl EphemeralKeyBytes {
     fn from_bytes(bytes: [u8; EPK_BYTES]) -> Option<Self> {
-        let encoded = p256::Sec1Point::from_bytes(bytes).ok()?;
-        if encoded.is_compressed() && p256::PublicKey::from_sec1_point(&encoded).is_some().into() {
-            Some(EphemeralKeyBytes(encoded))
-        } else {
-            None
-        }
+        let encoded = x25519_dalek::PublicKey::from(bytes);
+        Some(EphemeralKeyBytes(encoded))
     }
 
-    fn from_public_key(epk: &p256::PublicKey) -> Self {
-        EphemeralKeyBytes(epk.to_sec1_point(true))
+    fn from_public_key(epk: &x25519_dalek::PublicKey) -> Self {
+        EphemeralKeyBytes(*epk)
     }
 
     pub(crate) fn as_bytes(&self) -> &[u8] {
         self.0.as_bytes()
-    }
-
-    pub(crate) fn decompress(&self) -> p256::Sec1Point {
-        // EphemeralKeyBytes is a valid compressed encoding by construction.
-        let p = p256::PublicKey::from_sec1_point(&self.0).unwrap();
-        p.to_sec1_point(false)
     }
 }
 
@@ -103,15 +85,15 @@ impl RecipientLine {
 impl Recipient {
     pub(crate) fn wrap_file_key(&self, file_key: &FileKey) -> RecipientLine {
         let mut csprng = rand::rng();
-        let esk = EphemeralSecret::generate_from_rng(&mut csprng);
-        let epk = esk.public_key();
+        let esk = EphemeralSecret::random_from_rng(&mut csprng);
+        let epk = PublicKey::from(&esk);
         let epk_bytes = EphemeralKeyBytes::from_public_key(&epk);
 
         let shared_secret = esk.diffie_hellman(self.public_key());
 
-        let salt = salt(&epk_bytes, self.to_encoded());
+        let salt = salt(&epk_bytes, *self.public_key());
 
-        let enc_key = hkdf(&salt, STANZA_KEY_LABEL, shared_secret.raw_secret_bytes());
+        let enc_key = hkdf(&salt, STANZA_KEY_LABEL, shared_secret.as_bytes());
 
         let encrypted_file_key = {
             let mut key = [0; ENCRYPTED_FILE_KEY_BYTES];
@@ -130,21 +112,20 @@ impl Recipient {
 impl RecipientLine {
     pub(crate) fn unwrap_file_key(&self, conn: &mut Connection) -> Result<FileKey, ()> {
         let (static_tag, pk) = match conn.recipient() {
-            crate::recipient::Recipient::PivP256(recipient) => {
-                (recipient.tag(), recipient.to_encoded())
+            crate::recipient::Recipient::PivX25519(recipient) => {
+                (recipient.tag(), recipient.public_key())
             }
-            crate::recipient::Recipient::P256Tag(recipient) => {
-                (recipient.static_tag(), recipient.to_compressed())
+            crate::recipient::Recipient::X25519Tag(recipient) => {
+                (recipient.static_tag(), recipient.public_key())
             }
-            _ => panic!("Unsupported algorithm"),
+            _ => panic!("Unsupported recipient"),
         };
         assert_eq!(self.tag, static_tag);
 
-        let salt = salt(&self.epk_bytes, pk);
+        let salt = salt(&self.epk_bytes, *pk);
 
-        // The YubiKey API for performing scalar multiplication takes the point in its
-        // uncompressed SEC-1 encoding.
-        let shared_secret = conn.ecdh(self.epk_bytes.decompress().as_bytes())?;
+        // The YubiKey API for performing scalar multiplication
+        let shared_secret = conn.ecdh(self.epk_bytes.as_bytes())?;
 
         let enc_key = hkdf(&salt, STANZA_KEY_LABEL, shared_secret.as_ref());
 
@@ -161,8 +142,7 @@ impl RecipientLine {
     }
 }
 
-fn salt(epk_bytes: &EphemeralKeyBytes, pk: p256::Sec1Point) -> Vec<u8> {
-    assert!(pk.is_compressed());
+fn salt(epk_bytes: &EphemeralKeyBytes, pk: PublicKey) -> Vec<u8> {
     let mut salt = vec![];
     salt.extend_from_slice(epk_bytes.as_bytes());
     salt.extend_from_slice(pk.as_bytes());

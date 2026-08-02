@@ -12,6 +12,8 @@ use i18n_embed::{
 };
 use lazy_static::lazy_static;
 use rust_embed::RustEmbed;
+use yubikey::piv::SlotId;
+use yubikey::Key;
 use yubikey::{piv::RetiredSlotId, reader::Context, PinPolicy, Serial, TouchPolicy};
 
 mod builder;
@@ -19,6 +21,7 @@ mod error;
 mod key;
 mod native;
 mod piv_p256;
+mod piv_x25519;
 mod plugin;
 mod util;
 
@@ -26,6 +29,8 @@ mod recipient;
 use recipient::Recipient;
 
 use error::Error;
+
+use crate::plugin::SupportedTag;
 
 const PLUGIN_NAME: &str = "yubikey";
 const BINARY_NAME: &str = "age-plugin-yubikey";
@@ -92,6 +97,12 @@ struct PluginOptions {
     #[options(help = "Force --generate to overwrite a filled slot.")]
     force: bool,
 
+    #[options(
+        help = "Tag type of the key being generated. Defaults to p256tag.",
+        no_short
+    )]
+    tag: Option<String>,
+
     #[options(help = "Generate a new YubiKey identity.")]
     generate: bool,
 
@@ -136,6 +147,7 @@ struct PluginOptions {
 }
 
 struct PluginFlags {
+    tag: Option<SupportedTag>,
     serial: Option<Serial>,
     slot: Option<RetiredSlotId>,
     name: Option<String>,
@@ -148,6 +160,7 @@ impl TryFrom<PluginOptions> for PluginFlags {
     type Error = Error;
 
     fn try_from(opts: PluginOptions) -> Result<Self, Self::Error> {
+        let tag = opts.tag.map(util::tag_from_string).transpose()?;
         let serial = opts.serial.map(|s| s.into());
         let slot = opts.slot.map(util::ui_to_slot).transpose()?;
         let pin_policy = opts
@@ -160,6 +173,7 @@ impl TryFrom<PluginOptions> for PluginFlags {
             .transpose()?;
 
         Ok(PluginFlags {
+            tag,
             serial,
             slot,
             name: opts.name,
@@ -173,7 +187,7 @@ impl TryFrom<PluginOptions> for PluginFlags {
 fn generate(flags: PluginFlags) -> Result<(), Error> {
     let mut yubikey = key::open(flags.serial)?;
 
-    let (stub, recipient, metadata) = builder::IdentityBuilder::new(flags.slot)
+    let (stub, recipient, metadata) = builder::IdentityBuilder::new(flags.tag, flags.slot)
         .with_name(flags.name)
         .with_pin_policy(flags.pin_policy)
         .with_touch_policy(flags.touch_policy)
@@ -362,6 +376,33 @@ fn main() -> Result<(), Error> {
         );
         eprintln!();
 
+        let tag = match Select::new()
+            .with_prompt(fl!("cli-setup-tag"))
+            .items(&[
+                fl!("tag-p256"),
+                fl!("tag-x25519"),
+                fl!("tag-mlkem768x25519"),
+            ])
+            .default(
+                [
+                    SupportedTag::P256Tag,
+                    SupportedTag::X25519Tag,
+                    SupportedTag::MlKem768X25519Tag,
+                ]
+                .iter()
+                .position(|p| p == &flags.tag.unwrap_or(builder::DEFAULT_TAG))
+                .unwrap(),
+            )
+            .report(true)
+            .interact_opt()?
+        {
+            Some(0) => SupportedTag::P256Tag,
+            Some(1) => SupportedTag::X25519Tag,
+            Some(2) => SupportedTag::MlKem768X25519Tag,
+            Some(_) => unreachable!(),
+            None => return Ok(()),
+        };
+
         if !Context::open()?.iter()?.any(key::is_connected) {
             eprintln!("{}", fl!("cli-setup-insert-yk"));
         };
@@ -395,7 +436,18 @@ fn main() -> Result<(), Error> {
             None => return Ok(()),
         };
 
-        let keys = key::list_slots(&mut yubikey)?.collect::<Vec<_>>();
+        let keys = key::list_slots(&mut yubikey)?
+            .map(|(k, s, r)| match r {
+                Some(r) => {
+                    if r.identity_tag() == tag {
+                        (k, s, Some(r))
+                    } else {
+                        (k, s, None)
+                    }
+                }
+                None => (k, s, r),
+            })
+            .collect::<Vec<_>>();
 
         // Identify slots that we can't allow the user to select.
         let slot_details: Vec<_> = USABLE_SLOTS
@@ -406,15 +458,15 @@ fn main() -> Result<(), Error> {
                     .map(|(key, _, recipient)| {
                         recipient.as_ref().map(|_| {
                             // Cache the details we need to display to the user.
-                            let (_, cert) =
-                                x509_parser::parse_x509_certificate(key.certificate().as_ref())
-                                    .unwrap();
-                            let (name, _) = util::extract_name_and_version(&cert, true).unwrap();
-                            let created = cert
-                                .validity()
-                                .not_before
-                                .to_rfc2822()
-                                .unwrap_or_else(|e| format!("Invalid date: {e}"));
+                            let cert = &key.certificate().cert;
+                            let (name, _) = util::extract_name_and_version(cert, true).unwrap();
+                            let created = chrono::DateTime::<chrono::Utc>::from(
+                                cert.tbs_certificate()
+                                    .validity()
+                                    .not_before
+                                    .to_system_time(),
+                            )
+                            .to_rfc2822();
 
                             format!("{name}, created: {created}")
                         })
@@ -480,16 +532,34 @@ fn main() -> Result<(), Error> {
                     return Ok(());
                 }
             } else {
-                let name = Input::<String>::new()
-                    .with_prompt(format!(
-                        "{} [{}]",
-                        fl!("cli-setup-name-identity"),
-                        flags.name.as_deref().unwrap_or("age identity TAG_HEX")
-                    ))
-                    .allow_empty(true)
-                    .report(true)
-                    .interact_text()?;
-
+                let name = match tag {
+                    SupportedTag::X25519Tag | SupportedTag::MlKem768X25519Tag => {
+                        // Skip TAG_HEX prompt if we don't have a signing key and need to fallback
+                        // to a YubiKey attestation certificate.
+                        let all_keys = Key::list(&mut yubikey)?;
+                        match all_keys.iter().find(|p| p.slot() == SlotId::Signature) {
+                            Some(_) => Input::<String>::new()
+                                .with_prompt(format!(
+                                    "{} [{}]",
+                                    fl!("cli-setup-name-identity"),
+                                    flags.name.as_deref().unwrap_or("age identity TAG_HEX")
+                                ))
+                                .allow_empty(true)
+                                .report(true)
+                                .interact_text()?,
+                            None => String::from(""),
+                        }
+                    }
+                    SupportedTag::P256Tag => Input::<String>::new()
+                        .with_prompt(format!(
+                            "{} [{}]",
+                            fl!("cli-setup-name-identity"),
+                            flags.name.as_deref().unwrap_or("age identity TAG_HEX")
+                        ))
+                        .allow_empty(true)
+                        .report(true)
+                        .interact_text()?,
+                };
                 let mut displayed_yk4_warning = false;
                 let pin_policy = loop {
                     let pin_policy = match Select::new()
@@ -572,7 +642,7 @@ fn main() -> Result<(), Error> {
                 {
                     eprintln!();
                     (
-                        builder::IdentityBuilder::new(Some(slot))
+                        builder::IdentityBuilder::new(Some(tag), Some(slot))
                             .with_name(match name {
                                 s if s.is_empty() => flags.name,
                                 s => Some(s),
