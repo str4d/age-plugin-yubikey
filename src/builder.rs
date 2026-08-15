@@ -4,16 +4,16 @@ use x509::RelativeDistinguishedName;
 use yubikey::{
     certificate::Certificate,
     piv::{generate as yubikey_generate, AlgorithmId, RetiredSlotId, SlotId},
-    Key, PinPolicy, TouchPolicy, YubiKey,
+    PinPolicy, TouchPolicy, YubiKey,
 };
 
 use crate::{
     error::Error,
     fl,
-    key::{self, Stub},
+    key::{self, SlotState, Stub},
     native::p256tag,
     util::{Metadata, POLICY_EXTENSION_OID},
-    Recipient, BINARY_NAME, USABLE_SLOTS,
+    Recipient, BINARY_NAME,
 };
 
 pub(crate) const DEFAULT_PIN_POLICY: PinPolicy = PinPolicy::Once;
@@ -62,12 +62,15 @@ impl IdentityBuilder {
         let slot = match self.slot {
             Some(slot) => {
                 if !self.force {
-                    // Check that the slot is empty.
-                    if Key::list(yubikey)?
-                        .into_iter()
-                        .any(|key| key.slot() == SlotId::Retired(slot))
-                    {
-                        return Err(Error::SlotIsNotEmpty(slot));
+                    // Check that the slot is empty. A slot whose contents we can't parse
+                    // counts as occupied: we don't know what is stored there, so we must
+                    // not destroy it. We report that case the same way `--identity` and
+                    // `--list` do, rather than as a bare "not empty", and let genuine
+                    // failures to talk to the YubiKey surface as themselves.
+                    match key::slot_state(yubikey, slot)? {
+                        SlotState::Empty => (),
+                        SlotState::Unusable => return Err(Error::SlotIsUnusable(slot)),
+                        SlotState::Usable(..) => return Err(Error::SlotIsNotEmpty(slot)),
                     }
                 }
 
@@ -75,12 +78,9 @@ impl IdentityBuilder {
                 slot
             }
             None => {
-                // Use the first empty slot.
-                let keys = Key::list(yubikey)?;
-                USABLE_SLOTS
-                    .iter()
-                    .find(|&&slot| !keys.iter().any(|key| key.slot() == SlotId::Retired(slot)))
-                    .cloned()
+                // Use the first empty slot. Slots we can't parse are skipped over rather
+                // than selected, for the same reason as above.
+                key::first_empty_slot(yubikey)
                     .ok_or_else(|| Error::NoEmptySlots(yubikey.serial()))?
             }
         };

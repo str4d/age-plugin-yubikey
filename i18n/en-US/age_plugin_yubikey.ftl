@@ -217,6 +217,16 @@ err-slot-is-not-empty    = Slot {$slot} is not empty. Use {-flag-force} to overw
 err-timed-out            = Timed out while waiting for a {-yubikey} to be inserted.
 err-use-list-for-single  = Use {-cmd-list} to print the recipient for a single slot.
 
+err-slot-is-unusable =
+    Slot {$slot} contains a key that {-age-plugin-yubikey} cannot read. It may use an
+    algorithm that this plugin does not support, or have no certificate.
+rec-slot-is-unusable =
+    You can check what the slot holds with the {-yubikey} Manager CLI:
+    {"  "}{$cmd}
+
+    If you are sure you want to replace the key in this slot, generate over it with
+    {-cmd-generate} {-flag-slot} and {-flag-force}.
+
 err-yk-no-service-macos = The Crypto Token Kit service is not running.
 rec-yk-no-service-macos =
     You may need to restart it. See this Stack Exchange answer for more help:
