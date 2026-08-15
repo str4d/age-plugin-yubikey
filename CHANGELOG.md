@@ -23,6 +23,15 @@ to 0.3.0 are beta releases.
   shown in comments for identities generated with `age-plugin-yubikey 0.5.0` or
   earlier.
 
+### Fixed
+- `age-plugin-yubikey` no longer fails with `Error while communicating with
+  YubiKey: algorithm error` (or `invalid object`) when a PIV slot contains a key
+  it cannot parse, such as an RSA-4096 or Ed25519 key. Previously a single such
+  key anywhere on the YubiKey, including in slots this plugin does not use, made
+  `--list`, `--identity` and `--generate` fail entirely.
+- `--generate` no longer treats a slot it cannot read as empty, and no longer
+  overwrites a slot that holds a private key with no certificate.
+
 ## [0.3.4], [0.4.1], [0.5.1] - 2026-04-08
 ### Fixed
 - `age-plugin-yubikey` now completely ignores any identity that has unrecognised

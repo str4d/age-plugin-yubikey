@@ -17,9 +17,9 @@ use std::time::{Duration, Instant, SystemTime};
 use x509_parser::der_parser::oid::Oid;
 use yubikey::{
     certificate::Certificate,
-    piv::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
+    piv::{decrypt_data, metadata as piv_metadata, AlgorithmId, RetiredSlotId, SlotId},
     reader::{Context, Reader},
-    Key, MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
+    MgmKey, ObjectId, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
 use crate::{
@@ -28,7 +28,7 @@ use crate::{
     native::p256tag,
     recipient::TAG_BYTES,
     util::{otp_serial_prefix, Metadata, POLICY_EXTENSION_OID},
-    Recipient, IDENTITY_PREFIX,
+    Recipient, IDENTITY_PREFIX, USABLE_SLOTS,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -481,29 +481,141 @@ pub(crate) fn identify_recipient(cert: &Certificate) -> Option<Recipient> {
     p256tag::Recipient::from_certificate(cert).map(Recipient::P256Tag)
 }
 
-/// Returns an iterator of keys that are occupying plugin-compatible slots, along with the
-/// corresponding recipient if the key is compatible with this plugin.
-pub(crate) fn list_slots(
-    yubikey: &mut YubiKey,
-) -> Result<impl Iterator<Item = (Key, RetiredSlotId, Option<Recipient>)>, Error> {
-    Ok(Key::list(yubikey)?.into_iter().filter_map(|key| {
-        // We only use the retired slots.
-        match key.slot() {
-            SlotId::Retired(slot) => {
-                let recipient = identify_recipient(key.certificate());
-                Some((key, slot, recipient))
-            }
-            _ => None,
-        }
-    }))
+/// What one of the plugin-compatible slots contains.
+///
+/// The certificate is carried directly rather than as a `yubikey::piv::Key`, because
+/// `Key` has private fields and no public constructor: the only way to obtain one is
+/// `Key::list`, which is precisely what we are replacing. `Key` is a `(SlotId,
+/// Certificate)` pair, and every caller only ever used its `certificate()`.
+// `Usable` is much larger than the other variants, but we build at most one per usable
+// slot (of which there are 20), so boxing the certificate would cost more in legibility
+// than it saves.
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum SlotState {
+    /// The slot contains no certificate, so it is free for us to write to.
+    Empty,
+    /// The slot is occupied by a certificate that we cannot parse, so we have no idea
+    /// what it is being used for.
+    ///
+    /// This must never be conflated with [`SlotState::Empty`]: callers treat an empty
+    /// slot as safe to overwrite, and doing that here would destroy whatever key the
+    /// user has stored in the slot.
+    Unusable,
+    /// The slot contains a certificate that we can parse. The recipient is `Some` if the
+    /// key is compatible with this plugin.
+    Usable(Certificate, Option<Recipient>),
 }
 
-/// Returns an iterator of keys that are compatible with this plugin.
+/// The PIV data object ID of the first retired slot.
+///
+/// The retired slots are numbered contiguously from `0x82` (`RetiredSlotId::R1`), and
+/// their data objects are contiguous to match. `RetiredSlotId::object_id` in the
+/// `yubikey` crate is `pub(crate)`, so we derive the ID the same way it does.
+const RETIRED_SLOT_OBJECT_ID_BASE: ObjectId = 0x005f_c10d;
+
+/// Returns the PIV data object ID in which the given retired slot stores its certificate.
+fn slot_object_id(slot: RetiredSlotId) -> ObjectId {
+    RETIRED_SLOT_OBJECT_ID_BASE + (u8::from(slot) as ObjectId - 0x82)
+}
+
+/// Returns whether the given retired slot has anything stored in it.
+///
+/// A slot only counts as empty if it holds neither a certificate nor a private key. Both
+/// have to be checked: a slot can hold a key with no certificate (as left behind by
+/// `ykman piv keys import`, or by deleting just the certificate), and generating over one
+/// would destroy it. `Key::list` looked at certificates alone and so never saw these.
+///
+/// Neither check can produce a false "empty", which is the answer that costs a user their
+/// key:
+///
+/// - We ask for the raw certificate object rather than going through `Certificate::read`,
+///   because the latter cannot tell an empty slot apart from one holding a certificate it
+///   fails to parse: it reports `InvalidObject` for both. `fetch_object` answers
+///   `NotFound` only for status word 6A82; a communication failure surfaces as
+///   `PcscError`, and we treat anything we cannot positively establish as absent as
+///   "occupied".
+/// - Key metadata requires firmware 5.2.3 or newer, and its failures do not distinguish
+///   "no key in this slot" from "could not ask", so it is only ever used to say
+///   "occupied", never to conclude that a slot is free.
+pub(crate) fn slot_is_occupied(yubikey: &mut YubiKey, slot: RetiredSlotId) -> bool {
+    match yubikey.fetch_object(slot_object_id(slot)) {
+        Err(yubikey::Error::NotFound) => (),
+        Ok(buf) if buf.is_empty() => (),
+        // A certificate is stored here, or we could not tell.
+        _ => return true,
+    }
+
+    // No certificate, but the slot may still hold a private key.
+    piv_metadata(yubikey, SlotId::Retired(slot)).is_ok()
+}
+
+/// Returns the first slot that this plugin can use that has nothing stored in it.
+///
+/// This only checks occupancy, and stops at the first empty slot, so it usually costs a
+/// single round trip rather than reading and parsing all 20 slots.
+pub(crate) fn first_empty_slot(yubikey: &mut YubiKey) -> Option<RetiredSlotId> {
+    USABLE_SLOTS
+        .iter()
+        .copied()
+        .find(|&slot| !slot_is_occupied(yubikey, slot))
+}
+
+/// Returns the state of a single plugin-compatible slot.
+pub(crate) fn slot_state(yubikey: &mut YubiKey, slot: RetiredSlotId) -> Result<SlotState, Error> {
+    // Check occupancy first. Most slots are empty on a typical YubiKey, and ruling an
+    // empty slot out costs a single round trip this way, where going via
+    // `Certificate::read` would cost two (it can't distinguish empty from unparseable,
+    // so we'd end up asking for the raw object anyway).
+    if !slot_is_occupied(yubikey, slot) {
+        return Ok(SlotState::Empty);
+    }
+
+    match Certificate::read(yubikey, SlotId::Retired(slot)) {
+        Ok(cert) => {
+            let recipient = identify_recipient(&cert);
+            Ok(SlotState::Usable(cert, recipient))
+        }
+        // Something is stored in this slot, but we can't make sense of it. An unsupported
+        // key algorithm reports one of two ways: RSA-4096 gives `AlgorithmError`, while
+        // Ed25519 and X25519 fall through the catch-all arm of `PublicKeyInfo::parse` and
+        // give `InvalidObject`, as does malformed DER. The slot is occupied either way,
+        // and must never be offered up as empty.
+        Err(yubikey::Error::AlgorithmError | yubikey::Error::InvalidObject) => {
+            Ok(SlotState::Unusable)
+        }
+        // `yubikey::Error` is `#[non_exhaustive]`. Anything else is a genuine failure to
+        // talk to the YubiKey, which we surface rather than guess about.
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Returns the state of every slot that this plugin can use, in [`USABLE_SLOTS`] order.
+///
+/// We enumerate the retired slots ourselves instead of calling `yubikey::piv::Key::list`.
+/// That walks all 27 PIV objects, and while it tolerates read failures, a single
+/// certificate it cannot parse aborts the entire loop and discards every slot found so
+/// far. One unrelated key elsewhere on the YubiKey - including in the 9a/9c/9d/9e slots
+/// that this plugin never uses - would therefore hide every slot from us.
+///
+/// See https://github.com/str4d/age-plugin-yubikey/issues/241.
+pub(crate) fn list_slots(yubikey: &mut YubiKey) -> Result<Vec<(RetiredSlotId, SlotState)>, Error> {
+    USABLE_SLOTS
+        .iter()
+        .map(|&slot| slot_state(yubikey, slot).map(|state| (slot, state)))
+        .collect()
+}
+
+/// Returns an iterator of certificates in plugin-compatible slots that are compatible
+/// with this plugin, along with their slot and recipient.
 pub(crate) fn list_compatible(
     yubikey: &mut YubiKey,
-) -> Result<impl Iterator<Item = (Key, RetiredSlotId, Recipient)>, Error> {
-    list_slots(yubikey)
-        .map(|iter| iter.filter_map(|(key, slot, res)| res.map(|recipient| (key, slot, recipient))))
+) -> Result<impl Iterator<Item = (Certificate, RetiredSlotId, Recipient)>, Error> {
+    list_slots(yubikey).map(|slots| {
+        slots.into_iter().filter_map(|(slot, state)| match state {
+            SlotState::Usable(cert, Some(recipient)) => Some((cert, slot, recipient)),
+            _ => None,
+        })
+    })
 }
 
 /// A reference to an age key stored in a YubiKey.

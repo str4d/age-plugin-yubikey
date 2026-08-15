@@ -30,6 +30,7 @@ pub enum Error {
     PukLocked,
     SlotHasNoIdentity(RetiredSlotId),
     SlotIsNotEmpty(RetiredSlotId),
+    SlotIsUnusable(RetiredSlotId),
     TimedOut,
     UseListForSingleSlot,
     WrongPuk(u8),
@@ -119,6 +120,14 @@ impl fmt::Debug for Error {
             }
             Error::SlotIsNotEmpty(slot) => {
                 wlnfl!(f, "err-slot-is-not-empty", slot = slot_to_ui(slot))?
+            }
+            Error::SlotIsUnusable(slot) => {
+                // We can't name the algorithm ourselves: the `yubikey` crate rejects the
+                // certificate before telling us what it contains. `ykman piv info` prints
+                // the key type for every slot, so point the user at that.
+                const INSPECT_SLOTS_CMD: &str = "ykman piv info";
+                wlnfl!(f, "err-slot-is-unusable", slot = slot_to_ui(slot))?;
+                wlnfl!(f, "rec-slot-is-unusable", cmd = INSPECT_SLOTS_CMD)?;
             }
             Error::TimedOut => wlnfl!(f, "err-timed-out")?,
             Error::UseListForSingleSlot => wlnfl!(f, "err-use-list-for-single")?,

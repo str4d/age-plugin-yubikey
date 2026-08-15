@@ -199,12 +199,16 @@ fn print_single(
 ) -> Result<(), Error> {
     let mut yubikey = key::open(serial)?;
 
-    let (key, slot, recipient) = key::list_compatible(&mut yubikey)?
-        .find(|(_, s, _)| s == &slot)
-        .ok_or(Error::SlotHasNoIdentity(slot))?;
+    // Read only the slot we were asked about, so an unrelated slot we can't parse can't
+    // stop us from printing this one.
+    let (cert, recipient) = match key::slot_state(&mut yubikey, slot)? {
+        key::SlotState::Usable(cert, Some(recipient)) => (cert, recipient),
+        key::SlotState::Unusable => return Err(Error::SlotIsUnusable(slot)),
+        _ => return Err(Error::SlotHasNoIdentity(slot)),
+    };
 
     let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
-    let metadata = util::Metadata::extract(&mut yubikey, slot, key.certificate(), true).unwrap();
+    let metadata = util::Metadata::extract(&mut yubikey, slot, &cert, true).unwrap();
 
     printer(stub, recipient, metadata);
 
@@ -230,10 +234,9 @@ fn print_multiple(
             }
         }
 
-        for (key, slot, recipient) in key::list_compatible(&mut yubikey)? {
+        for (cert, slot, recipient) in key::list_compatible(&mut yubikey)? {
             let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
-            let metadata = match util::Metadata::extract(&mut yubikey, slot, key.certificate(), all)
-            {
+            let metadata = match util::Metadata::extract(&mut yubikey, slot, &cert, all) {
                 Some(res) => res,
                 None => continue,
             };
@@ -395,30 +398,28 @@ fn main() -> Result<(), Error> {
             None => return Ok(()),
         };
 
-        let keys = key::list_slots(&mut yubikey)?.collect::<Vec<_>>();
+        // One entry per usable slot, in `USABLE_SLOTS` order.
+        let keys = key::list_slots(&mut yubikey)?;
 
         // Identify slots that we can't allow the user to select.
-        let slot_details: Vec<_> = USABLE_SLOTS
+        let slot_details: Vec<_> = keys
             .iter()
-            .map(|&slot| {
-                keys.iter()
-                    .find(|(_, s, _)| s == &slot)
-                    .map(|(key, _, recipient)| {
-                        recipient.as_ref().map(|_| {
-                            // Cache the details we need to display to the user.
-                            let (_, cert) =
-                                x509_parser::parse_x509_certificate(key.certificate().as_ref())
-                                    .unwrap();
-                            let (name, _) = util::extract_name_and_version(&cert, true).unwrap();
-                            let created = cert
-                                .validity()
-                                .not_before
-                                .to_rfc2822()
-                                .unwrap_or_else(|e| format!("Invalid date: {e}"));
+            .map(|(_, state)| match state {
+                key::SlotState::Empty => None,
+                // Occupied by something we can't parse: present, but not selectable.
+                key::SlotState::Unusable => Some(None),
+                key::SlotState::Usable(cert, recipient) => Some(recipient.as_ref().map(|_| {
+                    // Cache the details we need to display to the user.
+                    let (_, cert) = x509_parser::parse_x509_certificate(cert.as_ref()).unwrap();
+                    let (name, _) = util::extract_name_and_version(&cert, true).unwrap();
+                    let created = cert
+                        .validity()
+                        .not_before
+                        .to_rfc2822()
+                        .unwrap_or_else(|e| format!("Invalid date: {e}"));
 
-                            format!("{name}, created: {created}")
-                        })
-                    })
+                    format!("{name}, created: {created}")
+                })),
             })
             .collect();
 
@@ -460,7 +461,12 @@ fn main() -> Result<(), Error> {
                 }
             };
 
-            if let Some((key, _, recipient)) = keys.into_iter().find(|(_, s, _)| s == &slot) {
+            let state = keys
+                .into_iter()
+                .find(|(s, _)| s == &slot)
+                .map(|(_, state)| state);
+
+            if let Some(key::SlotState::Usable(cert, recipient)) = state {
                 let recipient = recipient.expect("We checked this above");
 
                 if Confirm::new()
@@ -470,8 +476,7 @@ fn main() -> Result<(), Error> {
                 {
                     let stub = key::Stub::new(yubikey.serial(), slot, &recipient);
                     let metadata =
-                        util::Metadata::extract(&mut yubikey, slot, key.certificate(), true)
-                            .unwrap();
+                        util::Metadata::extract(&mut yubikey, slot, &cert, true).unwrap();
 
                     key::disconnect_without_reset(yubikey);
                     ((stub, recipient, metadata), false)
