@@ -44,6 +44,8 @@ jobs:
 
           - name: macos-x86_64
             os: macos-latest
+            target: x86_64-apple-darwin
+            build_flags: --target x86_64-apple-darwin
             archive_name: age-plugin-yubikey.tar.gz
             asset_suffix: x86_64-darwin.tar.gz
 
